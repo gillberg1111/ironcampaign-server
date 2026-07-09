@@ -1,0 +1,363 @@
+{
+  "comment": "questlog shared test vectors. BOTH the Swift and JS implementations must pass every case. hlc = 12 hex ms + 4 hex counter. Run order within each merge case is exactly as listed (applyBatch handles sorting internally; 'pre' rows are applied literally first).",
+  "hlc_pack": [
+    {
+      "ms": 0,
+      "counter": 0,
+      "expect": "0000000000000000"
+    },
+    {
+      "ms": 1720000000000,
+      "counter": 5,
+      "expect": "019077fd30000005"
+    },
+    {
+      "ms": 281474976710655,
+      "counter": 65535,
+      "expect": "ffffffffffffffff"
+    }
+  ],
+  "hlc_tick": [
+    {
+      "name": "wall clock advances -> counter resets",
+      "deviceId": "dev-a",
+      "persisted": "019077fd30000005",
+      "nowSequence": [
+        1720000000123
+      ],
+      "expectSequence": [
+        "019077fd307b0000"
+      ]
+    },
+    {
+      "name": "wall clock regressed -> ms held, counter increments (monotonic)",
+      "deviceId": "dev-a",
+      "persisted": "019077fd307b0000",
+      "nowSequence": [
+        1719999999000,
+        1719999999000
+      ],
+      "expectSequence": [
+        "019077fd307b0001",
+        "019077fd307b0002"
+      ]
+    },
+    {
+      "name": "counter overflow borrows 1ms",
+      "deviceId": "dev-a",
+      "persisted": "019077fd307bffff",
+      "nowSequence": [
+        1719999999000
+      ],
+      "expectSequence": [
+        "019077fd307c0000"
+      ]
+    }
+  ],
+  "hlc_receive": [
+    {
+      "name": "remote ahead of local and wall -> adopt remote ms, counter+1",
+      "deviceId": "dev-a",
+      "persisted": "019077fd307b0000",
+      "remote": "019077fd43880007",
+      "now": 1720000000123,
+      "expect": "019077fd43880008"
+    },
+    {
+      "name": "wall ahead of both -> wall wins, counter 0",
+      "deviceId": "dev-a",
+      "persisted": "019077fd307b0000",
+      "remote": "019077fd2c180009",
+      "now": 1720000005000,
+      "expect": "019077fd43880000"
+    },
+    {
+      "name": "equal ms -> max counter + 1",
+      "deviceId": "dev-a",
+      "persisted": "019077fd307b0003",
+      "remote": "019077fd307b0009",
+      "now": 1719999000000,
+      "expect": "019077fd307b000a"
+    },
+    {
+      "name": "remote too far ahead -> error",
+      "deviceId": "dev-a",
+      "persisted": "019077fd307b0000",
+      "remote": "019077fe1ec40000",
+      "now": 1720000000123,
+      "expectError": true
+    }
+  ],
+  "merge_cases": [
+    {
+      "name": "R1 different fields both apply",
+      "pre": [],
+      "changes": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "Upper B",
+          "hlc": "019077fd307b0001",
+          "deviceId": "phone"
+        },
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "est_minutes",
+          "value": 45,
+          "hlc": "019077fd307b0000",
+          "deviceId": "web"
+        }
+      ],
+      "expectDecisions": [
+        "applied",
+        "applied"
+      ],
+      "expectState": {
+        "t1": {
+          "name": "Upper B",
+          "est_minutes": 45
+        }
+      }
+    },
+    {
+      "name": "R2 same field LWW by hlc",
+      "pre": [],
+      "changes": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "Old",
+          "hlc": "019077fd307b0001",
+          "deviceId": "phone"
+        },
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "New",
+          "hlc": "019077fd307b0002",
+          "deviceId": "web"
+        }
+      ],
+      "expectDecisions": [
+        "applied",
+        "applied"
+      ],
+      "expectState": {
+        "t1": {
+          "name": "New"
+        }
+      }
+    },
+    {
+      "name": "R2 tie broken by deviceId (lexicographically higher wins), stale write ignored",
+      "pre": [],
+      "changes": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "FromWeb",
+          "hlc": "019077fd307b0002",
+          "deviceId": "web"
+        },
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "FromPhone",
+          "hlc": "019077fd307b0002",
+          "deviceId": "phone"
+        }
+      ],
+      "expectDecisions": [
+        "applied",
+        "ignored-older"
+      ],
+      "expectState": {
+        "t1": {
+          "name": "FromWeb"
+        }
+      },
+      "note": "applyBatch sorts (hlc,deviceId): phone applies first, web overwrites; the listed decisions are post-sort order phone->web = applied,applied then re-sorted output \u2014 implementations must compare against sorted order: ['applied','applied'] where final winner is web. If applied unsorted as listed: ['applied','ignored-older']. Test BOTH entry points: applyChange sequentially as listed expects ['applied','ignored-older']; applyBatch expects final state identical."
+    },
+    {
+      "name": "R3 append-only union + duplicate suppression",
+      "pre": [],
+      "changes": [
+        {
+          "table": "set_logs",
+          "uuid": "s1",
+          "field": "__row__",
+          "value": {
+            "session_uuid": "x",
+            "reps": 5,
+            "weight": 135
+          },
+          "hlc": "019077fd307b0001",
+          "deviceId": "phone"
+        },
+        {
+          "table": "set_logs",
+          "uuid": "s1",
+          "field": "__row__",
+          "value": {
+            "session_uuid": "x",
+            "reps": 5,
+            "weight": 135
+          },
+          "hlc": "019077fd307b0001",
+          "deviceId": "phone"
+        },
+        {
+          "table": "set_logs",
+          "uuid": "s2",
+          "field": "__row__",
+          "value": {
+            "session_uuid": "x",
+            "reps": 8,
+            "weight": 95
+          },
+          "hlc": "019077fd307b0000",
+          "deviceId": "watch"
+        }
+      ],
+      "expectDecisions": [
+        "appended",
+        "append-duplicate",
+        "appended"
+      ],
+      "expectState": {
+        "rows": [
+          "s1",
+          "s2"
+        ]
+      }
+    },
+    {
+      "name": "R4 tombstone suppresses lower-hlc edit AND later edit without un-delete",
+      "pre": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "Doomed",
+          "hlc": "019077fd307b0001",
+          "deviceId": "phone"
+        }
+      ],
+      "changes": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "deleted",
+          "value": true,
+          "hlc": "019077fd307b0005",
+          "deviceId": "phone"
+        },
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "StaleEdit",
+          "hlc": "019077fd307b0003",
+          "deviceId": "web"
+        },
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "LaterEditNoUndelete",
+          "hlc": "019077fd307b0007",
+          "deviceId": "web"
+        }
+      ],
+      "expectDecisions": [
+        "applied",
+        "ignored-tombstoned",
+        "ignored-tombstoned"
+      ],
+      "expectState": {
+        "t1": {
+          "deleted": true,
+          "name": "Doomed"
+        }
+      }
+    },
+    {
+      "name": "R4 explicit un-delete then edit replays correctly (batch-sorted)",
+      "pre": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "deleted",
+          "value": true,
+          "hlc": "019077fd307b0005",
+          "deviceId": "phone"
+        }
+      ],
+      "changes": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "deleted",
+          "value": false,
+          "hlc": "019077fd307b0008",
+          "deviceId": "web"
+        },
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "name",
+          "value": "Revived",
+          "hlc": "019077fd307b0009",
+          "deviceId": "web"
+        }
+      ],
+      "expectDecisions": [
+        "undeleted",
+        "applied"
+      ],
+      "expectState": {
+        "t1": {
+          "deleted": false,
+          "name": "Revived"
+        }
+      }
+    },
+    {
+      "name": "stale tombstone loses to newer tombstone meta",
+      "pre": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "deleted",
+          "value": false,
+          "hlc": "019077fd307b0009",
+          "deviceId": "web"
+        }
+      ],
+      "changes": [
+        {
+          "table": "workout_templates",
+          "uuid": "t1",
+          "field": "deleted",
+          "value": true,
+          "hlc": "019077fd307b0004",
+          "deviceId": "phone"
+        }
+      ],
+      "expectDecisions": [
+        "ignored-older"
+      ],
+      "expectState": {
+        "t1": {
+          "deleted": false
+        }
+      }
+    }
+  ]
+}

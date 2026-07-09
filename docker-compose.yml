@@ -1,0 +1,16 @@
+services:
+  ironcampaign:
+    build: .
+    container_name: ironcampaign
+    ports:
+      - "3000:3000"           # LAN demo: http://<host-lan-ip>:3000 — put Caddy/TLS in front for internet exposure
+    volumes:
+      - ironcampaign-data:/data
+    environment:
+      DB_PATH: /data/ironcampaign.db
+      PORT: 3000
+      # LOG_REQUESTS: "1"     # opt-in four-field request log (never logs secrets)
+    restart: unless-stopped
+
+volumes:
+  ironcampaign-data:

@@ -1,0 +1,18 @@
+[Unit]
+Description=IronCampaign Sync Node
+After=network.target
+
+[Service]
+# A real system user shared with the backup units (create once):
+#   useradd --system --home /var/lib/ironcampaign --shell /usr/sbin/nologin ironcampaign
+#   mkdir -p /var/lib/ironcampaign && chown ironcampaign: /var/lib/ironcampaign
+User=ironcampaign
+Environment=DB_PATH=/var/lib/ironcampaign/ironcampaign.db PORT=3000
+WorkingDirectory=/opt/ironcampaign
+ExecStart=/usr/bin/node server/src/app.js
+Restart=on-failure
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ironcampaign
+
+[Install]
+WantedBy=multi-user.target

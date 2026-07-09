@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly SQLite backup for IronCampaign
+
+[Service]
+Type=oneshot
+User=ironcampaign
+ExecStart=/bin/bash /opt/ironcampaign/deploy/backup.sh
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ironcampaign

@@ -1,0 +1,24 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Install deps (root + server)
+        run: |
+          npm ci
+          cd server && npm ci
+      - name: Secret-logging gate
+        run: |
+          if grep -rniE "phrase|token" server/src --include='*.js' | grep -iE ':[0-9]+:.*log' | grep -vE ':[0-9]+:\s*(//|\*)'; then
+            echo "::error::secret appears near a log call"; exit 1
+          fi
+      - name: ShellCheck backup script
+        run: sudo apt-get install -y shellcheck && shellcheck deploy/backup.sh
+      - name: Tests
+        run: cd server && npm test

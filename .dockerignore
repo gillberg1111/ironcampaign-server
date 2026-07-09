@@ -1,0 +1,14 @@
+.git
+node_modules
+server/node_modules
+server/data
+ios
+spec-docs
+store
+deploy
+*.md
+!server/**/*.md
+questlog-critical.zip
+.github
+.claude
+.DS_Store

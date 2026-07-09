@@ -1,0 +1,29 @@
+# Caddyfile for IronCampaign self-hosting.
+# Automatic TLS via Let's Encrypt/ZeroSSL; Caddy is the PRIMARY rate limiter
+# (the in-module limiter in the pairing path is defense-in-depth only).
+#
+# REQUIRES the rate-limit plugin (not in stock Caddy):
+#   xcaddy build --with github.com/mholt/caddy-ratelimit
+# Without it, remove the rate_limit block or Caddy will fail to start.
+
+your-domain.com {
+    encode gzip
+
+    rate_limit {
+        # Strict on pairing: brute-force/scanning protection for phrases.
+        zone pair {
+            match { path /api/v1/sync/pair }
+            key {remote_host}
+            window 1m
+            events 5
+        }
+        zone api {
+            match { path /api/v1/* }
+            key {remote_host}
+            window 1m
+            events 100
+        }
+    }
+
+    reverse_proxy localhost:3000
+}

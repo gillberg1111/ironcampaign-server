@@ -1,0 +1,21 @@
+{
+  "name": "ironcampaign-sync",
+  "type": "module",
+  "version": "2.27.1",
+  "private": true,
+  "description": "IronCampaign sync node — training field guide backend",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "better-sqlite3": "^11.3.0",
+    "argon2": "^0.41.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
