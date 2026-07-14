@@ -9,6 +9,14 @@ export const COMBAT = {
   CONFESSION_XP: 5,
   DECAY_THRESHOLD_DAYS: 14,
   DECAY_HP_PER_INTERVAL: 5,
+  HYDRATION_DAMAGE: 2,
+  HYDRATION_XP: 2,
+  HYDRATION_MIN_OZ: 8,
+};
+
+export const CONSTANT_FOES = {
+  heavy: { slot: 'constant_heavy', name: 'The Rust', tier: 'heavy', maxHP: 100, defeatXP: 30, description: 'Iron left out in the rain doesn\u2019t rust overnight\u2014it fades one thin layer at a time. Three days off is all it takes for the joints to stiffen. Get back under the bar before the surface hardens.' },
+  minion: { slot: 'constant_minion', name: 'The Drought', tier: 'minion', maxHP: 16, defeatXP: 5, description: 'Your body runs on water the way an engine runs on oil. When the tank runs low, everything grinds a little harder. Fill up before you start the engine.' },
 };
 
 export function heavyStrike(villain) {
@@ -59,8 +67,11 @@ export function confession(villain) {
 }
 
 export function applyDecay(villain, lastSessionAt) {
-  const now = Date.now();
-  const fourteenDays = 14 * 24 * 60 * 60 * 1000;
+  // Domain timestamps are SECONDS (device convention: timeIntervalSince1970). The old ms
+  // math meant every device-synced last_session_at (~1.7e9) sat below an ms cutoff
+  // (~1.7e12), so decay fired on villains that were active yesterday.
+  const now = Math.floor(Date.now() / 1000);
+  const fourteenDays = 14 * 24 * 60 * 60;
 
   if (now - lastSessionAt < fourteenDays) return null;
 

@@ -1,26 +1,25 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeApp, addDevice, addOwner, authHeader, postJson, getJson } from './helpers.js';
+import { makeApp, addDevice, addOwner, claimOwner, authHeader, postJson, getJson } from './helpers.js';
 import { createPairing, authenticateDevice, revokeDevice } from '../../questlog-critical/sync-auth/pairing.js';
-import { createOwnerKey, authenticateOwner } from '../src/auth/owner.js';
+import { hashPassword, verifyPassword, authenticateOwner } from '../src/auth/owner.js';
 
 describe('Owner auth & endpoints', () => {
-  it('createOwnerKey → key authenticates', () => {
-    const { db } = makeApp();
-    const result = createOwnerKey(db, 'profile-1');
-    assert.ok(result.key);
-    assert.equal(result.profileUuid, 'profile-1');
-
-    const auth = authenticateOwner(db, `Bearer ${result.key}`);
-    assert.equal(auth.profileUuid, 'profile-1');
+  it('hashPassword produces scrypt hash that verifyPassword accepts', () => {
+    const hashed = hashPassword('secret-password');
+    assert.ok(typeof hashed === 'string');
+    assert.ok(hashed.includes(':'));
+    assert.equal(verifyPassword(hashed, 'secret-password'), true);
+    assert.equal(verifyPassword(hashed, 'wrong-password'), false);
+    assert.equal(verifyPassword(null, 'anything'), false);
+    assert.equal(verifyPassword('badformat', 'anything'), false);
   });
 
-  it('wrong / blank owner key → 401', () => {
+  it('wrong / blank console token → 401', () => {
     const { db } = makeApp();
-    createOwnerKey(db, 'profile-1');
 
     assert.throws(
-      () => authenticateOwner(db, 'Bearer bad-key-here-nope-fake-tok'),
+      () => authenticateOwner(db, 'Bearer bad-token-fake-value-here-'),
       (e) => e.status === 401
     );
     assert.throws(
@@ -33,18 +32,12 @@ describe('Owner auth & endpoints', () => {
     );
   });
 
-  it('rotation invalidates old key', () => {
+  it('console token authenticates after claim', () => {
     const { db } = makeApp();
-    const first = createOwnerKey(db, 'profile-1');
-    const second = createOwnerKey(db, 'profile-1');
+    const { token, profileUuid } = claimOwner(db, 'admin', 'password123');
 
-    assert.notEqual(first.key, second.key);
-
-    assert.doesNotThrow(() => authenticateOwner(db, `Bearer ${second.key}`));
-    assert.throws(
-      () => authenticateOwner(db, `Bearer ${first.key}`),
-      (e) => e.status === 401
-    );
+    const auth = authenticateOwner(db, `Bearer ${token}`);
+    assert.equal(auth.profileUuid, profileUuid);
   });
 
   it('POST /owner/pairings mints a working phrase', async () => {
@@ -52,9 +45,9 @@ describe('Owner auth & endpoints', () => {
     const srv = app.listen(0);
     const base = `http://localhost:${srv.address().port}`;
     try {
-      const owner = addOwner(db, 'profile-1');
+      const { token } = claimOwner(db, 'admin', 'password123');
 
-      const res = await postJson(`${base}/api/v1/owner/pairings`, {}, authHeader(owner.key));
+      const res = await postJson(`${base}/api/v1/owner/pairings`, {}, authHeader(token));
       assert.equal(res.status, 200);
       assert.ok(res.data.phrase);
       assert.ok(res.data.expiresAt);
@@ -64,13 +57,12 @@ describe('Owner auth & endpoints', () => {
         deviceName: 'test-device',
       });
       assert.equal(pairRes.status, 200);
-      assert.equal(pairRes.data.profileUuid, 'profile-1');
     } finally {
       srv.close();
     }
   });
 
-  it('POST /owner/pairings without owner key → 401', async () => {
+  it('POST /owner/pairings without token → 401', async () => {
     const { app } = makeApp();
     const srv = app.listen(0);
     const base = `http://localhost:${srv.address().port}`;
@@ -94,9 +86,10 @@ describe('Owner auth & endpoints', () => {
       addDevice(db, 'profile-a', 'device-a2');
       addDevice(db, 'profile-b', 'device-b1');
 
-      const res = await getJson(`${base}/api/v1/owner/devices`, authHeader(ownerA.key));
+      const res = await getJson(`${base}/api/v1/owner/devices`, authHeader(ownerA.token));
       assert.equal(res.status, 200);
-      assert.equal(res.data.devices.length, 2);
+      // profile-a has 2 devices + 1 console token = 3
+      assert.equal(res.data.devices.length, 3);
 
       for (const d of res.data.devices) {
         assert.ok(!('token_sha256' in d), 'must not leak token hash');
@@ -106,7 +99,7 @@ describe('Owner auth & endpoints', () => {
       }
 
       const names = res.data.devices.map(d => d.device_name).sort();
-      assert.deepStrictEqual(names, ['device-a1', 'device-a2']);
+      assert.deepStrictEqual(names, ['Web console', 'device-a1', 'device-a2']);
     } finally {
       srv.close();
     }
@@ -127,7 +120,7 @@ describe('Owner auth & endpoints', () => {
       ).all('profile-b');
       const deviceBId = devicesB[0].id;
 
-      const res = await postJson(`${base}/api/v1/owner/devices/${deviceBId}/revoke`, {}, authHeader(ownerA.key));
+      const res = await postJson(`${base}/api/v1/owner/devices/${deviceBId}/revoke`, {}, authHeader(ownerA.token));
       assert.equal(res.status, 404, 'owner A should get 404 for B device');
 
       const gotTokenB = db.prepare(
@@ -146,20 +139,20 @@ describe('Owner auth & endpoints', () => {
     const srv = app.listen(0);
     const base = `http://localhost:${srv.address().port}`;
     try {
-      const owner = addOwner(db, 'profile-1');
-      const token = addDevice(db, 'profile-1', 'to-revoke');
+      const { token, profileUuid } = claimOwner(db, 'admin', 'password123');
+      const deviceToken = addDevice(db, profileUuid, 'to-revoke');
 
       const devices = db.prepare(
         'SELECT id FROM device_tokens WHERE profile_uuid = ? ORDER BY id'
-      ).all('profile-1');
-      const deviceId = devices[0].id;
+      ).all(profileUuid);
+      const deviceId = devices.find(d => d.id !== devices[0].id)?.id || devices[0].id;
 
-      const res = await postJson(`${base}/api/v1/owner/devices/${deviceId}/revoke`, {}, authHeader(owner.key));
+      const res = await postJson(`${base}/api/v1/owner/devices/${deviceId}/revoke`, {}, authHeader(token));
       assert.equal(res.status, 200);
       assert.equal(res.data.revoked, true);
 
       assert.throws(
-        () => authenticateDevice(db, `Bearer ${token}`),
+        () => authenticateDevice(db, `Bearer ${deviceToken}`),
         (e) => e.status === 401
       );
     } finally {

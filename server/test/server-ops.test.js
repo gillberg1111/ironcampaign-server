@@ -158,3 +158,22 @@ describe2261('Push batch cap (2.26.1 audit)', () => {
     } finally { srv.close(); }
   });
 });
+
+describe('GET /health (v2.54)', () => {
+  it('returns uptime_s and schema_version', async () => {
+    const db = makeDb();
+    const app = createApp(db);
+    const srv = app.listen(0);
+    const base = `http://localhost:${srv.address().port}`;
+    try {
+      const res = await fetch(`${base}/health`);
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.equal(body.status, 'ok');
+      assert.ok(typeof body.uptime_s === 'number');
+      assert.ok(body.uptime_s >= 0);
+      assert.ok(typeof body.schema_version === 'number');
+      assert.ok(body.schema_version >= 1);
+    } finally { srv.close(); }
+  });
+});

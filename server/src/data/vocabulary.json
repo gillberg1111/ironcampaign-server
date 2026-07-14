@@ -1,0 +1,15 @@
+[
+  {"term": "programs", "flavor": "Sagas", "serious": "Programs"},
+  {"term": "program", "flavor": "Saga", "serious": "Program"},
+  {"term": "phases", "flavor": "Chapters", "serious": "Phases"},
+  {"term": "phase", "flavor": "Chapter", "serious": "Phase"},
+  {"term": "feedTitle", "flavor": "The Chronicle", "serious": "History"},
+  {"term": "feedTab", "flavor": "Chronicle", "serious": "History"},
+  {"term": "historyTab", "flavor": "History", "serious": "History"},
+  {"term": "villains", "flavor": "Villains", "serious": "Goals"},
+  {"term": "villain", "flavor": "Villain", "serious": "Goal"},
+  {"term": "encounters", "flavor": "Encounters", "serious": "Workouts"},
+  {"term": "encounter", "flavor": "Encounter", "serious": "Workout"},
+  {"term": "foe", "flavor": "Foe", "serious": "Obstacle"},
+  {"term": "foes", "flavor": "Foes", "serious": "Obstacles"}
+]

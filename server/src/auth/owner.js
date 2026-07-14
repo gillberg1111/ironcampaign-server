@@ -1,31 +1,41 @@
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 
-export function createOwnerKey(db, profileUuid) {
-  const key = randomBytes(32).toString('base64url');
-  const hash = createHash('sha256').update(key).digest('hex');
+export function hashPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(stored, password) {
+  if (!stored || typeof stored !== 'string' || !stored.includes(':')) return false;
+  const [salt, hash] = stored.split(':');
+  const verify = scryptSync(password, salt, 64).toString('hex');
+  // Constant-time compare — a === on hex strings leaks a (marginal) timing signal.
+  const a = Buffer.from(verify, 'hex');
+  const b = Buffer.from(hash, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export function mintConsoleToken(db, profileUuid) {
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
   const now = Date.now();
-
-  const existing = db.prepare('SELECT profile_uuid FROM owners WHERE profile_uuid = ?').get(profileUuid);
-  if (existing) {
-    db.prepare('UPDATE owners SET owner_key_sha256 = ?, rotated_at = ? WHERE profile_uuid = ?')
-      .run(hash, now, profileUuid);
-  } else {
-    db.prepare('INSERT INTO owners (profile_uuid, owner_key_sha256, created_at) VALUES (?, ?, ?)')
-      .run(profileUuid, hash, now);
-  }
-
-  return { key, profileUuid };
+  db.prepare(
+    'INSERT INTO device_tokens (profile_uuid, token_sha256, device_name, created_at) VALUES (?, ?, ?, ?)'
+  ).run(profileUuid, tokenHash, 'Web console', now);
+  return token;
 }
 
 export function authenticateOwner(db, authorizationHeader) {
   const m = /^Bearer ([A-Za-z0-9_-]{40,50})$/.exec(authorizationHeader || '');
   if (!m) { const e = new Error('unauthorized'); e.status = 401; throw e; }
-  const hash = createHash('sha256').update(m[1]).digest('hex');
+  const tokenHash = createHash('sha256').update(m[1]).digest('hex');
   const row = db.prepare(
-    'SELECT profile_uuid FROM owners WHERE owner_key_sha256 = ?'
-  ).get(hash);
+    'SELECT id, profile_uuid FROM device_tokens WHERE token_sha256 = ? AND revoked_at IS NULL'
+  ).get(tokenHash);
   if (!row) { const e = new Error('unauthorized'); e.status = 401; throw e; }
-  return { profileUuid: row.profile_uuid };
+  db.prepare('UPDATE device_tokens SET last_seen_at = ? WHERE id = ?').run(Date.now(), row.id);
+  return { profileUuid: row.profile_uuid, deviceTokenId: row.id };
 }
 
 export function makeOwnerAuth(db) {

@@ -13,7 +13,7 @@ describe('Schema v8 (measurements)', () => {
     migrate(db);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
     assert.ok(tables.includes('measurements'));
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 8);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 18);
 
     const cols = db.pragma('table_info(measurements)').map(c => c.name);
     assert.ok(cols.includes('timestamp'));

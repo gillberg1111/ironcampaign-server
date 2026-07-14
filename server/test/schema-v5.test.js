@@ -13,7 +13,7 @@ describe('Schema v5 (sagas.current_chapter_uuid)', () => {
     migrate(db); // second run must be a no-op, not a crash
     const cols = db.pragma('table_info(sagas)').map(c => c.name);
     assert.ok(cols.includes('current_chapter_uuid'));
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 8);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 18);
   });
 
   it('registry allows the new field (and still rejects unknowns)', () => {

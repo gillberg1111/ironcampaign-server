@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 18;
 
 function columnExists(db, table, column) {
   const rows = db.pragma(`table_info(${table})`);
@@ -244,6 +244,61 @@ function applyV8(db) {
   db.exec('CREATE INDEX IF NOT EXISTS idx_measurements_kind ON measurements(kind)');
 }
 
+function applyV9(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS foe_catalog (
+    uuid TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    tier TEXT NOT NULL CHECK (tier IN ('minion','heavy','miniboss','boss')),
+    max_hp INTEGER NOT NULL,
+    xp_reward INTEGER NOT NULL,
+    encounter_weight INTEGER NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    builtin_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    profile_uuid TEXT NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_foe_catalog_profile_uuid ON foe_catalog(profile_uuid, uuid)');
+  addColumnIfMissing(db, 'villains', 'tier', 'TEXT');
+  addColumnIfMissing(db, 'villains', 'xp_reward', 'INTEGER');
+  addColumnIfMissing(db, 'villains', 'slot', 'TEXT');
+  addColumnIfMissing(db, 'villains', 'catalog_uuid', 'TEXT');
+  // xp_events.reason has no CHECK constraint; the new 'villain_defeated' value needs no DDL.
+}
+
+function applyV10(db) {
+  if (!columnExists(db, 'villain_events', 'reason')) return;
+  // Atomic on purpose: without the transaction, a crash between DROP and RENAME leaves the DB
+  // with no villain_events, and the columnExists guard above would then skip the repair forever.
+  const rebuild = db.transaction(() => {
+    db.exec('DROP TABLE IF EXISTS villain_events_v10');
+    db.exec(`CREATE TABLE villain_events_v10 (
+        uuid TEXT PRIMARY KEY,
+        villain_uuid TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('heavy_strike','chipped_damage','fortify','glancing_blow','confession','decay','hydration')),
+        damage INTEGER NOT NULL DEFAULT 0,
+        xp INTEGER NOT NULL DEFAULT 0,
+        damage_roll INTEGER,
+        result_stamp TEXT,
+        buff_stamp TEXT,
+        profile_uuid TEXT NOT NULL
+      )
+    `);
+    db.exec('INSERT INTO villain_events_v10 SELECT * FROM villain_events');
+    db.exec('DROP TABLE villain_events');
+    db.exec('ALTER TABLE villain_events_v10 RENAME TO villain_events');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_villain_events_villain ON villain_events(villain_uuid)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_villain_events_timestamp ON villain_events(timestamp)');
+  });
+  rebuild();
+}
+
+function applyV14(db) {
+  addColumnIfMissing(db, 'owners', 'setup_key_delivered_at', 'INTEGER');
+}
+
 function migrate(db) {
   db.pragma('journal_mode = WAL');
   // FKs are intentionally OFF on the sync node: it is a relay, and merged changes can arrive
@@ -287,9 +342,134 @@ function migrate(db) {
     applyV8(db);
     db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(8);
   }
+
+  if (currentVersion < 9) {
+    applyV9(db);
+    db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(9);
+  }
+
+  if (currentVersion < 10) {
+    applyV10(db);
+    db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(10);
+  }
+
+  if (currentVersion < 11) {
+    applyV11(db);
+    db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(11);
+  }
+
+  if (currentVersion < 12) {
+    applyV12(db);
+    db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(12);
+  }
+
+  if (currentVersion < 13) {
+    applyV13(db);
+    db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(13);
+  }
+
+    if (currentVersion < 14) {
+      applyV14(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(14);
+    }
+
+    if (currentVersion < 15) {
+      applyV15(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(15);
+    }
+
+    if (currentVersion < 16) {
+      applyV16(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(16);
+    }
+
+    if (currentVersion < 17) {
+      applyV17(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(17);
+    }
+
+    if (currentVersion < 18) {
+      applyV18(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(18);
+    }
+  }
+
+function applyV11(db) {
+  addColumnIfMissing(db, 'exercises', 'tracking_type', "TEXT NOT NULL DEFAULT 'strength'");
+  addColumnIfMissing(db, 'set_logs', 'completed', 'INTEGER NOT NULL DEFAULT 1');
+  addColumnIfMissing(db, 'set_logs', 'duration_sec', 'INTEGER');
+  addColumnIfMissing(db, 'set_logs', 'distance_m', 'INTEGER');
 }
 
-function applyV3(db) {
+function applyV12(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS planned_workouts (
+    uuid TEXT PRIMARY KEY,
+    chapter_uuid TEXT NOT NULL,
+    day_index INTEGER NOT NULL,
+    template_uuid TEXT,
+    name TEXT NOT NULL,
+    notes TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    profile_uuid TEXT NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_planned_workouts_profile_uuid ON planned_workouts(profile_uuid, uuid)');
+  addColumnIfMissing(db, 'template_exercises', 'target_weight_kg', 'REAL');
+}
+
+function applyV13(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS schedule_rules (
+    uuid TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    template_uuid TEXT,
+    planned_workout_uuid TEXT,
+    start_date TEXT NOT NULL,
+    recurrence TEXT NOT NULL CHECK (recurrence IN ('once','interval','weekly')),
+    interval_days INTEGER,
+    weekday_mask INTEGER,
+    end_date TEXT,
+    notes TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    profile_uuid TEXT NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_schedule_rules_profile_uuid ON schedule_rules(profile_uuid, uuid)');
+  addColumnIfMissing(db, 'sessions', 'schedule_rule_uuid', 'TEXT');
+  addColumnIfMissing(db, 'sessions', 'planned_workout_uuid', 'TEXT');
+  addColumnIfMissing(db, 'sessions', 'scheduled_date', 'TEXT');
+  addColumnIfMissing(db, 'sagas', 'start_date', 'TEXT');
+}
+
+function applyV15(db) {
+    addColumnIfMissing(db, 'foe_catalog', 'description', 'TEXT');
+  }
+
+  function applyV16(db) {
+    addColumnIfMissing(db, 'owners', 'username', 'TEXT');
+    addColumnIfMissing(db, 'owners', 'password_hash', 'TEXT');
+  }
+
+  function applyV17(db) {
+    addColumnIfMissing(db, 'exercises', 'builtin_id', 'TEXT');
+  }
+
+  function applyV18(db) {
+    db.exec(`CREATE TABLE IF NOT EXISTS device_cursors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      profile_uuid TEXT NOT NULL,
+      device_token_id INTEGER NOT NULL,
+      cursor_seq INTEGER NOT NULL DEFAULT 0,
+      last_seen_at INTEGER NOT NULL,
+      FOREIGN KEY (device_token_id) REFERENCES device_tokens(id),
+      UNIQUE(profile_uuid, device_token_id)
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_device_cursors_profile_seen ON device_cursors(profile_uuid, last_seen_at)');
+  }
+
+  function applyV3(db) {
   const domainTables = ['villains', 'sagas', 'chapters', 'sessions', 'xp_events', 'villain_events', 'narrations'];
   for (const t of domainTables) {
     addColumnIfMissing(db, t, 'profile_uuid', "TEXT NOT NULL DEFAULT '__migrate__'");

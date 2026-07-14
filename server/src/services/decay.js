@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { applyBatch } from '../../../questlog-critical/hlc-merge/merge.js';
 import { SqliteStorageAdapter } from '../sync/adapter.js';
 import { applyDecay } from './combat.js';
+import { compactChangeLog } from './compaction.js';
 
-const DECAY_THRESHOLD_MS = 14 * 24 * 60 * 60 * 1000;
+// Domain timestamps (last_session_at, villain_events.timestamp) are SECONDS — the device
+// convention. Only the HLC wall clock and change_log.created_at stay in milliseconds.
+const DECAY_THRESHOLD_SEC = 14 * 24 * 60 * 60;
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const SERVER_DEVICE_ID = 'server-decay';
 
@@ -12,8 +15,9 @@ const SERVER_DEVICE_ID = 'server-decay';
 // dedicated server-decay identity + persisted HLC, and it loses to any newer device write rather
 // than silently clobbering it. Accepted changes are appended to change_log so devices observe them.
 export function runDecaySweep(db) {
-  const now = Date.now();
-  const cutoff = now - DECAY_THRESHOLD_MS;
+  const nowMs = Date.now();
+  const now = Math.floor(nowMs / 1000);
+  const cutoff = now - DECAY_THRESHOLD_SEC;
 
   const villains = db.prepare(
     `SELECT uuid, hp, max_hp, last_session_at, active, deleted, profile_uuid FROM villains
@@ -30,7 +34,7 @@ export function runDecaySweep(db) {
     const result = applyDecay(villain, villain.last_session_at); // mutates villain.hp (reads max_hp)
     if (!result) continue;
 
-    const hlc = tickServerClock(db, now);
+    const hlc = tickServerClock(db, nowMs);
     const eventUuid = randomUUID();
     const changes = [
       { table: 'villains', uuid: villain.uuid, field: 'hp', value: villain.hp, hlc, deviceId: SERVER_DEVICE_ID },
@@ -50,7 +54,7 @@ export function runDecaySweep(db) {
         if (decision === 'applied' || decision === 'appended' || decision === 'undeleted') {
           insertLog.run(
             villain.profile_uuid, change.table, change.uuid, change.field,
-            JSON.stringify(change.value), change.hlc, change.deviceId, null, now
+            JSON.stringify(change.value), change.hlc, change.deviceId, null, nowMs
           );
         }
       }
@@ -79,7 +83,11 @@ function tickServerClock(db, now) {
 
 export function startDecayScheduler(db) {
   runDecaySweep(db);
-  const timer = setInterval(() => runDecaySweep(db), CHECK_INTERVAL_MS);
+  compactChangeLog(db);
+  const timer = setInterval(() => {
+    runDecaySweep(db);
+    compactChangeLog(db);
+  }, CHECK_INTERVAL_MS);
   if (typeof timer.unref === 'function') timer.unref();
   return timer;
 }

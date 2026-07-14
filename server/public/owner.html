@@ -3,132 +3,1578 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IronCampaign — Owner</title>
+<title>IronCampaign</title>
 <style>
-  :root { --oxblood:#73121f; --ink:#1a1a1a; --gray:#6b6b6b; --line:#e2e2e2; }
-  * { box-sizing:border-box; }
-  body { font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); max-width:720px; margin:0 auto; padding:24px; }
-  h1 { font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
-  .sub { color:var(--gray); margin-top:-12px; }
-  input,button { font:inherit; padding:10px 12px; border-radius:8px; border:1px solid var(--line); }
-  button { background:var(--oxblood); color:#fff; border:none; cursor:pointer; }
-  button.secondary { background:#fff; color:var(--oxblood); border:1px solid var(--oxblood); }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
-  .card { border:1px solid var(--line); border-radius:12px; padding:16px; margin:16px 0; }
-  code { background:#f5f5f5; padding:2px 6px; border-radius:6px; }
-  table { width:100%; border-collapse:collapse; }
-  th,td { text-align:left; padding:8px; border-bottom:1px solid var(--line); font-size:14px; }
-  .phrase { font-size:20px; font-weight:700; letter-spacing:.02em; }
-  .msg { color:var(--gray); font-size:14px; }
-  .revoked { color:var(--gray); text-decoration:line-through; }
-  .qrbox { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-top:12px; }
-  .qrbox svg { border:1px solid var(--line); border-radius:8px; }
+/* ── IronCampaign Field Manual — v2.52 ── */
+:root {
+  --oxblood:#73121f; --oxblood-light:#a02030; --oxblood-engrave:#5a0e1a;
+  --oxblood-text:#d17b82; /* brand red as TEXT — 6.1:1 on cards (deep oxblood is <2.6:1, fails). Fills/borders keep --oxblood/-light */
+  --ink:#141414; --gray:#6b6b6b; --line:#2a2a2a; --line-engraved:#1e1e1e;
+  --bg:#0a0a0a; --card:#121212; --card-elevated:#181818; --card-muted:#0e0e0e;
+  --text:#e2ded8; --text-dim:#8a8782; --green:#2d7d46; --red:#bc4742;
+  --serif:'Iowan Old Style','Palatino Nova',Palatino,Georgia,serif;
+  --mono:'SF Mono','Cascadia Code',Consolas,monospace;
+  --sans:-apple-system,'Segoe UI',Roboto,sans-serif;
+  --radius:4px; --grid:4px;
+}
+*,::before,::after { box-sizing:border-box; margin:0; padding:0; }
+
+body {
+  font:15px/1.55 var(--sans);
+  color:var(--text); background:var(--bg);
+  min-height:100vh;
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.008) 2px,rgba(255,255,255,.008) 3px);
+  background-size:100% 3px;
+}
+
+h1,h2,h3 {
+  font-family:var(--serif); font-weight:800;
+  letter-spacing:.06em; text-transform:uppercase;
+}
+h2 { font-size:20px; margin-bottom:16px; color:var(--text); }
+h3 {
+  font-size:13px; color:var(--text-dim); margin-bottom:12px; letter-spacing:.1em;
+  border-bottom:1px solid var(--line); padding-bottom:6px;
+}
+input,select,button { font:inherit; }
+input,select {
+  padding:8px 12px; border-radius:var(--radius); border:1px solid var(--line);
+  background:var(--card); color:var(--text);
+}
+input:focus-visible,select:focus-visible {
+  outline:none; border-color:var(--oxblood-light);
+  box-shadow:0 0 0 2px rgba(160,32,48,.25);
+}
+button {
+  padding:8px 20px; border-radius:var(--radius); border:none; cursor:pointer;
+  background:var(--oxblood); color:#fff; font-weight:600; font-size:13px;
+  letter-spacing:.03em; text-transform:uppercase;
+  transition:background .15s, transform .1s;
+}
+button:active { transform:scale(.97); }
+button:hover { background:var(--oxblood-light); }
+button:focus-visible { outline:2px solid var(--oxblood-light); outline-offset:2px; }
+button:disabled { opacity:.35; cursor:default; transform:none; }
+button:disabled:hover { background:var(--oxblood); }
+button.secondary {
+  background:transparent; color:var(--text); border:1px solid var(--line);
+}
+button.secondary:hover { background:var(--card-elevated); }
+button.danger { background:var(--red); }
+button.danger:hover { background:#d4534a; }
+button.small { padding:4px 12px; font-size:11px; letter-spacing:.04em; }
+.msg { color:var(--text-dim); font-size:13px; font-family:var(--sans); }
+.error { color:var(--red); font-size:13px; }
+
+/* ── Cards (FieldManualCard) ── */
+.card {
+  background:var(--card); border:1px solid var(--line-engraved); border-radius:var(--radius);
+  padding:16px; margin-bottom:12px; position:relative;
+}
+.card::after {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:rgba(255,255,255,.04);
+}
+/* corner tick on cards */
+.card::before {
+  content:'\25E4'; position:absolute; top:4px; right:6px;
+  font-size:8px; color:rgba(255,255,255,.06); pointer-events:none;
+}
+
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+.row.sb { justify-content:space-between; }
+
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th,td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); }
+th {
+  font-family:var(--serif); color:var(--text-dim); font-weight:700;
+  text-transform:uppercase; font-size:11px; letter-spacing:.08em;
+  border-bottom-width:2px;
+}
+code { background:var(--card); padding:1px 5px; border-radius:var(--radius); font-size:13px; }
+
+/* ── Tabs ── */
+nav.tabs {
+  display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid var(--line);
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
+}
+nav.tabs button {
+  background:none; color:var(--text-dim); border:none; border-radius:0;
+  padding:10px 16px; font-family:var(--serif); font-weight:700;
+  font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+  border-bottom:2px solid transparent; margin-bottom:-2px;
+  white-space:nowrap; transition:color .15s, border-color .15s;
+}
+nav.tabs button:hover { color:var(--text); }
+nav.tabs button.active { color:var(--text); border-bottom-color:var(--oxblood-light); }
+
+/* ── Layout ── */
+#app { max-width:800px; margin:0 auto; padding:16px; }
+.view { display:none; }
+.view.active { display:block; }
+
+/* ── Auth screens (login/claim) ── */
+.auth-screen { max-width:420px; margin:80px auto 0; }
+.auth-screen h2 {
+  text-align:center; margin-bottom:24px; font-size:32px; font-weight:900;
+  letter-spacing:.12em; color:var(--oxblood-text);
+  text-shadow:0 1px 0 rgba(0,0,0,.5);
+}
+.auth-screen h2::after {
+  content:''; display:block; width:48px; height:2px; background:var(--oxblood);
+  margin:12px auto 0;
+}
+.auth-error { color:var(--red); font-size:13px; margin-top:6px; min-height:18px; }
+
+/* ── HP bar with damage-tick texture ── */
+.hpbar {
+  height:12px; border-radius:2px; background:var(--card); margin:6px 0 10px; overflow:hidden;
+  border:1px solid var(--line-engraved);
+}
+.hpbar div {
+  height:100%; border-radius:2px; transition:width .4s;
+  background-image:
+    repeating-linear-gradient(90deg,transparent,transparent 1px,rgba(0,0,0,.2) 1px,rgba(0,0,0,.2) 2px);
+  background-size:12px 100%;
+}
+.hpbar.warn div { background-color:var(--red); }
+.hpbar.ok div { background-color:var(--oxblood); }
+.hpbar.full div { background-color:var(--green); }
+.hp-label { font-size:11px; color:var(--text-dim); font-family:var(--mono);
+  font-variant-numeric:tabular-nums; }
+
+/* ── Stamps ── */
+.defeated-stamp, .stamp {
+  display:inline-block; border:2px solid var(--oxblood); color:var(--oxblood-text);
+  padding:3px 10px; border-radius:2px; font-size:11px; font-weight:900;
+  font-family:var(--serif); letter-spacing:.12em; text-transform:uppercase;
+  transform:rotate(-6deg); opacity:.85;
+  text-shadow:0 1px 0 rgba(0,0,0,.5), 0 0 6px rgba(115,18,31,.3);
+}
+
+/* ── Calendar grid ── */
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.cal-grid .day-head {
+  text-align:center; font-family:var(--serif); font-size:11px; color:var(--text-dim); 
+  padding:6px 0; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+}
+.cal-grid .day {
+  aspect-ratio:1; display:flex; align-items:center; justify-content:center;
+  border-radius:2px; font-size:13px; cursor:pointer; position:relative;
+  background:var(--card); font-family:var(--mono); font-variant-numeric:tabular-nums;
+  border:1px solid var(--line-engraved);
+}
+.cal-grid .day.has { background:var(--oxblood); color:#fff; font-weight:700; border-color:var(--oxblood); }
+.cal-grid .day.done { background:var(--green); color:#fff; border-color:var(--green); }
+.cal-grid .day.done::after {
+  content:''; position:absolute; bottom:3px; width:4px; height:4px; border-radius:50%; background:#fff;
+}
+
+/* ── Modal overlay ── */
+.overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.8); display:flex;
+  align-items:center; justify-content:center; z-index:100;
+}
+.overlay .panel {
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:24px; max-width:400px; width:90%; max-height:85vh; overflow-y:auto;
+  position:relative;
+}
+.overlay .panel::before {
+  content:''; position:absolute; top:0;left:0;right:0;height:1px;background:rgba(255,255,255,.06);
+}
+.overlay .panel h3 { margin-bottom:16px; }
+
+/* ── Chronicle feed ── */
+.feed-item { padding:10px 0; border-bottom:1px solid var(--line); }
+.feed-item:last-child { border-bottom:none; }
+
+/* ── Day detail panel ── */
+.day-detail {
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:16px; margin-top:8px; position:relative;
+}
+.day-detail::after {
+  content:''; position:absolute; top:0;left:0;right:0;height:1px;background:rgba(255,255,255,.04);
+}
+.day-detail h3 { margin-bottom:12px; }
+.day-detail .section { margin-bottom:12px; }
+.day-detail .section h4 {
+  font-size:11px; color:var(--text-dim); text-transform:uppercase;
+  font-family:var(--serif); letter-spacing:.08em; margin-bottom:6px;
+  padding-bottom:4px; border-bottom:1px solid var(--line);
+}
+.day-detail .item { padding:6px 0; font-size:13px; border-bottom:1px solid var(--line); }
+.day-detail .item:last-child { border-bottom:none; }
+.cal-grid .day { cursor:pointer; }
+.cal-grid .day:hover { filter:brightness(1.3); }
+.cal-grid .day.selected { outline:2px solid var(--oxblood-light); outline-offset:-2px; }
+
+/* ── Card descriptions ── */
+.card-desc { font-size:12px; color:var(--text-dim); font-style:italic; margin-top:4px; line-height:1.45; }
+
+/* ── Empty states ── */
+.msg:only-child { font-style:italic; color:var(--text-dim); padding:20px 0; text-align:center; }
+
+/* ── Toast message ── */
+.toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:var(--card-elevated); color:var(--text); padding:10px 24px; border-radius:var(--radius);
+  font-size:13px; z-index:200; opacity:0; transition:opacity .2s; pointer-events:none;
+  border:1px solid var(--line); }
+.toast.show { opacity:1; }
+
+/* ── Responsive: ≤ 375px ── */
+@media (max-width:420px) {
+  #app { padding:8px; }
+  h2 { font-size:17px; }
+  nav.tabs button { padding:8px 10px; font-size:10px; letter-spacing:.04em; }
+  .card { padding:12px; }
+  .auth-screen { margin:40px auto 0; }
+  .auth-screen h2 { font-size:24px; }
+  .overlay .panel { padding:16px; }
+  .cal-grid .day { font-size:11px; }
+  table { font-size:12px; }
+  th,td { padding:6px 4px; }
+}
+
+/* ── Reduced motion (spec §9): neutralize every added transition/animation ── */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    transition-duration:.001ms !important;
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+  }
+}
 </style>
 <script src="qr.js"></script>
 </head>
 <body>
-  <h1>IronCampaign</h1>
-  <p class="sub">Owner console — device pairing &amp; management</p>
-
-  <div class="card">
-    <div class="row">
-      <input id="key" type="password" placeholder="Owner key" style="flex:1" autocomplete="off">
-      <button onclick="loadDevices()">Connect</button>
-    </div>
-    <p class="msg" id="authMsg">The key is kept only in this tab and sent as a Bearer header. It is never stored.</p>
-  </div>
-
-  <div class="card">
-    <div class="row">
-      <button onclick="createPairing()">Create pairing</button>
-      <span class="msg" id="pairMsg"></span>
-    </div>
-    <div id="phraseBox" style="display:none">
-      <p class="phrase" id="phrase"></p>
-      <div class="qrbox" id="qrBox"></div>
-      <p class="msg">Enter this on the device within the window: <span id="expiry"></span></p>
+<div id="app">
+  <!-- CLAIM SCREEN (unclaimed server) -->
+  <div id="view-claim" class="view" style="display:none">
+    <div class="auth-screen">
+      <h2>Create Admin Account</h2>
+      <div class="card">
+        <div class="row"><input id="claimUser" placeholder="Username" style="flex:1" autocomplete="username"></div>
+        <div class="row"><input id="claimPass" type="password" placeholder="Password (min 8 chars)" style="flex:1" autocomplete="new-password"></div>
+        <div class="row" style="margin-top:8px">
+          <button onclick="doClaim()" style="flex:1">Create Account</button>
+        </div>
+        <div class="auth-error" id="claimErr"></div>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="row"><strong>Devices</strong><button class="secondary" onclick="loadDevices()">Refresh</button></div>
-    <table><thead><tr><th>Name</th><th>Created</th><th>Last seen</th><th></th></tr></thead>
-      <tbody id="devices"></tbody></table>
+  <!-- LOGIN SCREEN (claimed, no token) -->
+  <div id="view-login" class="view" style="display:none">
+    <div class="auth-screen">
+      <h2>Login</h2>
+      <div class="card">
+        <div class="row"><input id="loginUser" placeholder="Username" style="flex:1" autocomplete="username"></div>
+        <div class="row"><input id="loginPass" type="password" placeholder="Password" style="flex:1" autocomplete="current-password"></div>
+        <div class="row" style="margin-top:8px">
+          <button onclick="doLogin()" style="flex:1">Login</button>
+        </div>
+        <div class="auth-error" id="loginErr"></div>
+      </div>
+    </div>
   </div>
+
+  <nav class="tabs" id="mainTabs" style="display:none">
+    <button data-tab="console" class="active">Console</button>
+    <button data-tab="today">Today</button>
+    <button data-tab="calendar">Calendar</button>
+    <button data-tab="sagas">Sagas</button>
+    <button data-tab="history">History</button>
+    <button data-tab="roster">Roster</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <div class="row" style="margin-bottom:12px;justify-content:flex-end;align-items:center" id="syncRow" style="display:none">
+    <span id="syncTime" class="msg" style="margin-right:12px"></span>
+    <button id="syncNowBtn" onclick="doSync()">Sync Now</button>
+  </div>
+
+  <!-- CONSOLE TAB (logged in) -->
+  <div id="view-console" class="view active">
+    <h2>Owner Console</h2>
+    <p class="msg">Device pairing &amp; management</p>
+    <div class="card">
+      <div class="row">
+        <button onclick="createPairing()">Generate iOS Pairing Phrase</button>
+        <span class="msg" id="pairMsg"></span>
+      </div>
+      <div id="phraseBox" style="display:none">
+        <p style="font-size:18px;font-weight:700;letter-spacing:.02em" id="phrase"></p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px" id="qrBox"></div>
+        <p class="msg">Enter this on the device — expires: <span id="expiry"></span></p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row sb"><strong>Devices</strong><button class="small secondary" onclick="loadDevices()">Refresh</button></div>
+      <table><thead><tr><th>Name</th><th>Created</th><th>Last seen</th><th></th></tr></thead>
+        <tbody id="devices"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="row sb">
+        <span>Logout</span>
+        <button class="small secondary" onclick="doLogout()">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TODAY TAB -->
+  <div id="view-today" class="view">
+    <h2>Today</h2>
+    <div id="todayContent">Loading…</div>
+  </div>
+
+  <!-- CALENDAR TAB -->
+  <div id="view-calendar" class="view">
+    <div class="row sb" style="margin-bottom:12px">
+      <h2>Calendar</h2>
+      <div class="row">
+        <button class="small secondary" onclick="calPrev()">&larr;</button>
+        <span id="calLabel" style="font-weight:700;min-width:120px;text-align:center"></span>
+        <button class="small secondary" onclick="calNext()">&rarr;</button>
+      </div>
+    </div>
+    <div id="calGrid" class="cal-grid"></div>
+    <div id="calDetail" style="display:none"></div>
+    <div class="msg" style="margin-top:8px" id="calLegend">Green = completed. Red = scheduled.</div>
+  </div>
+
+  <!-- SAGAS TAB -->
+  <div id="view-sagas" class="view">
+    <div class="row sb" style="margin-bottom:12px">
+      <h2>Sagas</h2>
+      <button class="small" onclick="showAddSaga()">+ New Saga</button>
+    </div>
+    <div id="sagasContent">Loading…</div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="view-history" class="view">
+    <div class="row sb" style="margin-bottom:12px">
+      <h2>History</h2>
+      <div class="row">
+        <button class="small secondary" onclick="histPrev()">&larr;</button>
+        <span id="histLabel" style="font-weight:700;min-width:120px;text-align:center"></span>
+        <button class="small secondary" onclick="histNext()">&rarr;</button>
+      </div>
+    </div>
+    <div id="histGrid" class="cal-grid"></div>
+    <div id="histTotals" style="margin-top:12px"></div>
+  </div>
+
+  <!-- ROSTER TAB -->
+  <div id="view-roster" class="view">
+    <div class="row sb" style="margin-bottom:12px">
+      <h2>Opposition Roster</h2>
+      <button class="small" onclick="showAddFoe()">+ Custom Foe</button>
+    </div>
+    <div id="rosterContent">Loading…</div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div id="view-settings" class="view">
+    <h2>Settings</h2>
+
+    <div class="card">
+      <h3>Preferences</h3>
+      <div class="row sb">
+        <span>Plain Names</span>
+        <button class="small secondary" id="plainNamesBtn" onclick="togglePlainNames()">Off</button>
+      </div>
+      <div class="row sb">
+        <span>Weight Unit</span>
+        <button class="small secondary" id="weightUnitBtn" onclick="toggleWeightUnit()">kg</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row sb" style="margin-bottom:8px">
+        <h3 style="margin:0">Measurements</h3>
+        <button class="small" onclick="showAddMeasurement()">+ Log</button>
+      </div>
+      <div id="measurementsList"><span class="msg">Loading…</span></div>
+    </div>
+
+    <div class="card">
+      <div class="row sb" style="margin-bottom:8px">
+        <h3 style="margin:0">Workout Templates</h3>
+        <button class="small" onclick="showAddTemplate()">+ New</button>
+      </div>
+      <div id="templatesList"><span class="msg">Loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h3>Version</h3>
+      <div id="versionDisplay" class="msg">Loading…</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+    <div class="panel" id="modalContent"></div>
+  </div>
+</div>
 
 <script>
-const API = "/api/v1/owner";
-const keyEl = () => document.getElementById("key");
-const hdr = () => ({ "Authorization": "Bearer " + keyEl().value, "Content-Type": "application/json" });
-const fmt = t => t ? new Date(t).toLocaleString() : "—";
+// ── State ──
+const API = '/api/v1';
+const OWNER = API + '/owner';
+const DATA = API + '/data';
+const COMBAT = API + '/combat';
+let token = localStorage.getItem('ic_console_token') || '';
+
+(async function init() {
+  if (window.__IC_UNCLAIMED__) {
+    showClaimView();
+    return;
+  }
+  // Server is claimed
+  if (token) {
+    const ok = await verifyToken();
+    if (ok) {
+      showMainView();
+    } else {
+      token = '';
+      localStorage.removeItem('ic_console_token');
+      showLoginView();
+    }
+  } else {
+    showLoginView();
+  }
+})();
+
+function showClaimView() {
+  document.getElementById('view-claim').style.display = 'block';
+  document.getElementById('view-login').style.display = 'none';
+  document.getElementById('mainTabs').style.display = 'none';
+  document.getElementById('syncRow').style.display = 'none';
+  document.getElementById('view-console').classList.remove('active');
+  document.getElementById('view-console').style.display = 'none';
+}
+
+function showLoginView() {
+  document.getElementById('view-claim').style.display = 'none';
+  document.getElementById('view-login').style.display = 'block';
+  document.getElementById('mainTabs').style.display = 'none';
+  document.getElementById('syncRow').style.display = 'none';
+  document.getElementById('view-console').classList.remove('active');
+  document.getElementById('view-console').style.display = 'none';
+}
+
+function showMainView() {
+  document.getElementById('view-claim').style.display = 'none';
+  document.getElementById('view-login').style.display = 'none';
+  document.getElementById('view-console').style.display = '';
+  document.getElementById('mainTabs').style.display = 'flex';
+  document.getElementById('syncRow').style.display = 'flex';
+  switchTab('console');
+  loadVocab().then(applyVocab);
+}
+
+function saveToken(t) {
+  token = t;
+  localStorage.setItem('ic_console_token', t);
+}
+
+// ── Claim / Login ──
+async function doClaim() {
+  const el = document.getElementById('claimErr');
+  const username = document.getElementById('claimUser').value.trim();
+  const password = document.getElementById('claimPass').value;
+  if (!username || !password) { el.textContent = 'Username and password required.'; return; }
+  if (password.length < 8) { el.textContent = 'Password must be at least 8 characters.'; return; }
+  el.textContent = '';
+  try {
+    const r = await fetch(OWNER + '/claim', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username, password})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    saveToken(d.token);
+    window.__IC_UNCLAIMED__ = false;
+    showMainView();
+  } catch (e) { el.textContent = e.message; }
+}
+
+async function doLogin() {
+  const el = document.getElementById('loginErr');
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  if (!username || !password) { el.textContent = 'Username and password required.'; return; }
+  el.textContent = '';
+  try {
+    const r = await fetch(OWNER + '/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username, password})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    saveToken(d.token);
+    showMainView();
+  } catch (e) { el.textContent = e.message; }
+}
+
+async function verifyToken() {
+  try {
+    const r = await fetch(OWNER + '/devices', { headers:apiHdr() });
+    return r.ok;
+  } catch (_) { return false; }
+}
+
+function doLogout() {
+  token = '';
+  localStorage.removeItem('ic_console_token');
+  location.reload();
+}
+
+// ── Auth headers ──
+function apiHdr() {
+  return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+}
+
+// ── Tabs ──
+document.querySelectorAll('nav.tabs button').forEach(b => {
+  b.addEventListener('click', () => switchTab(b.dataset.tab));
+});
+function switchTab(name) {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+  if (!token && name !== 'console') { toast('Login first — enter your credentials to continue'); return; }
+  if (name === 'console' && token) loadDevices();
+  else if (name === 'today') loadToday();
+  else if (name === 'calendar') loadCalendar();
+  else if (name === 'sagas') loadSagas();
+  else if (name === 'history') loadHistory();
+  else if (name === 'roster') loadRoster();
+  else if (name === 'settings') loadSettings();
+}
+
+async function doSync() {
+  if (!token) { toast('Login first'); return; }
+  const btn = document.getElementById('syncNowBtn');
+  btn.textContent = 'Syncing…';
+  try {
+    const act = document.querySelector('nav.tabs button.active');
+    const name = act ? act.dataset.tab : null;
+    if (name === 'console' && token) await loadDevices();
+    else if (name === 'today') await loadToday();
+    else if (name === 'calendar') await loadCalendar();
+    else if (name === 'sagas') await loadSagas();
+    else if (name === 'history') await loadHistory();
+    else if (name === 'roster') await loadRoster();
+    else if (name === 'settings') await loadSettings();
+    btn.textContent = 'Synced ✓';
+    document.getElementById('syncTime').textContent = 'Last fetched: ' + new Date().toLocaleTimeString();
+    setTimeout(() => { btn.textContent = 'Sync Now'; }, 2000);
+  } catch (e) {
+    toast(e.message);
+    btn.textContent = 'Sync Now';
+  }
+}
+
+let _vocabEntries = null;
+
+async function loadVocab() {
+  if (_vocabEntries) return;
+  try {
+    const r = await fetch('/vocabulary.json');
+    if (r.ok) _vocabEntries = await r.json();
+  } catch (_) {}
+}
+
+function buildVocabDict() {
+  const dict = {};
+  if (!_vocabEntries) return dict;
+  for (const e of _vocabEntries) {
+    if (plainNames) {
+      dict[e.flavor] = e.serious;
+      dict[e.flavor.toLowerCase()] = e.serious.toLowerCase();
+    } else {
+      dict[e.serious] = e.flavor;
+      dict[e.serious.toLowerCase()] = e.flavor.toLowerCase();
+    }
+  }
+  return dict;
+}
+
+function applyVocab() {
+  const dict = buildVocabDict();
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+  let n;
+  while(n = walk.nextNode()) {
+    if (n.parentNode && (n.parentNode.tagName === 'SCRIPT' || n.parentNode.tagName === 'STYLE')) continue;
+    let txt = n.nodeValue;
+    let changed = false;
+    for (let k in dict) {
+      const regex = new RegExp('\\b' + k + '\\b', 'g');
+      if (regex.test(txt)) { txt = txt.replace(regex, dict[k]); changed = true; }
+    }
+    if (changed) n.nodeValue = txt;
+  }
+}
+
+// ── Settings ──
+let plainNames = localStorage.getItem('ic_plainNames') === '1';
+let weightUnitSetting = localStorage.getItem('ic_weightUnit') || 'kg';
+
+async function loadSettings() {
+  document.getElementById('plainNamesBtn').textContent = plainNames ? 'On' : 'Off';
+  document.getElementById('weightUnitBtn').textContent = weightUnitSetting;
+  await loadMeasurements();
+  await loadTemplates();
+  await loadVersion();
+  applyVocab();
+}
+
+function togglePlainNames() {
+  plainNames = !plainNames;
+  localStorage.setItem('ic_plainNames', plainNames ? '1' : '0');
+  document.getElementById('plainNamesBtn').textContent = plainNames ? 'On' : 'Off';
+  applyVocab();
+}
+
+function toggleWeightUnit() {
+  weightUnitSetting = weightUnitSetting === 'kg' ? 'lbs' : 'kg';
+  localStorage.setItem('ic_weightUnit', weightUnitSetting);
+  document.getElementById('weightUnitBtn').textContent = weightUnitSetting;
+}
+
+// ── Version ──
+async function loadVersion() {
+  try {
+    const v = await apiGet(DATA + '/version');
+    document.getElementById('versionDisplay').textContent = 'Server v' + v.version;
+  } catch (e) {
+    document.getElementById('versionDisplay').textContent = 'Unknown';
+  }
+}
+
+// ── Measurements ──
+function showAddMeasurement() {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Log Measurement</h3>' +
+    '<div class="row"><select id="measKind"><option value="bodyweight">Bodyweight</option><option value="waist">Waist</option><option value="hips">Hips</option><option value="chest">Chest</option><option value="arm">Arm</option><option value="thigh">Thigh</option></select></div>' +
+    '<div class="row"><input id="measValue" type="number" step="0.1" placeholder="Value" style="flex:1"></div>' +
+    '<div class="row"><input id="measUnit" placeholder="Unit" value="' + e(weightUnitSetting) + '" style="width:80px"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddMeasurement()">Log</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddMeasurement() {
+  const kind = document.getElementById('measKind').value;
+  const value = parseFloat(document.getElementById('measValue').value);
+  const unit = document.getElementById('measUnit').value.trim() || weightUnitSetting;
+  if (isNaN(value)) return toast('Value required');
+  try {
+    await apiPost(DATA + '/measurements', { kind, value, unit });
+    closeModal();
+    toast('Measurement logged');
+    loadMeasurements();
+  } catch (e) { toast(e.message); }
+}
+
+async function loadMeasurements() {
+  const el = document.getElementById('measurementsList');
+  try {
+    const data = await apiGet(DATA + '/measurements');
+    const list = data.measurements || [];
+    if (!list.length) { el.innerHTML = '<span class="msg">No measurements logged.</span>'; return; }
+    var html = '<table><thead><tr><th>Kind</th><th>Value</th><th>Date</th></tr></thead><tbody>';
+    for (const m of list.slice(0, 20)) {
+      html += '<tr><td>' + e(m.kind) + '</td><td>' + Number(m.value) + ' ' + e(m.unit) + '</td><td>' + fmtSec(m.timestamp) + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = '<span class="error">' + e.message + '</span>'; }
+}
+
+// ── Templates ──
+function showAddTemplate() {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>New Template</h3>' +
+    '<div class="row"><input id="newTplName" placeholder="Template name" style="flex:1"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddTemplate()">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddTemplate() {
+  const name = document.getElementById('newTplName').value.trim();
+  if (!name) return;
+  try {
+    await apiPost(DATA + '/templates', { name });
+    closeModal();
+    toast('Template created');
+    loadTemplates();
+  } catch (e) { toast(e.message); }
+}
+
+async function doDeleteTemplate(uuid) {
+  if (!confirm('Delete this template?')) return;
+  try {
+    await api(DATA + '/templates/' + uuid, { method: 'DELETE' });
+    toast('Template deleted');
+    loadTemplates();
+  } catch (e) { toast(e.message); }
+}
+
+async function loadTemplates() {
+  const el = document.getElementById('templatesList');
+  try {
+    const data = await apiGet(DATA + '/templates');
+    const templates = data.templates || [];
+    if (!templates.length) { el.innerHTML = '<span class="msg">No templates yet.</span>'; return; }
+    var html = '<table><thead><tr><th>Name</th><th>Exercises</th><th></th></tr></thead><tbody>';
+    for (const t of templates) {
+      const exNames = (t.exercises || []).map(ex => ex.notes || 'Exercise').join(', ');
+      html += '<tr><td>' + e(t.name) + '</td><td>' + e(exNames) + '</td>';
+      html += '<td><button class="small danger" onclick="doDeleteTemplate(' + jsArg(t.uuid) + ')">Delete</button></td></tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = '<span class="error">' + e.message + '</span>'; }
+}
+
+// ── Helpers ──
+const fmtSec = t => t ? new Date(t * 1000).toLocaleDateString() : '—';
+const fmtSecFull = t => t ? new Date(t * 1000).toLocaleString() : '—';
+const e = s => String(s).replace(/[&<>"'`]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;', '`':'&#96;' }[c]));
+const jsArg = v => e(JSON.stringify(String(v)));
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+function hpColor(hp, max) {
+  if (hp <= 0) return 'warn';
+  if (hp / max < 0.3) return 'warn';
+  if (hp / max < 0.7) return 'ok';
+  return 'full';
+}
+function hpPct(hp, max) { return Math.round((hp / max) * 100); }
+
+async function api(url, opts = {}) {
+  const h = { ...apiHdr(), ...(opts.headers || {}) };
+  const res = await fetch(url, { ...opts, headers: h });
+  if (!res.ok) {
+    const txt = await res.text();
+    let msg = 'HTTP ' + res.status;
+    try { msg = JSON.parse(txt).error || msg; } catch (_) {}
+    if (res.status === 401) { token = ''; localStorage.removeItem('ic_console_token'); }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+async function apiGet(u) { return api(u); }
+async function apiPost(u, body) { return api(u, { method:'POST', body:JSON.stringify(body) }); }
+async function apiPut(u, body) { return api(u, { method:'PUT', body:JSON.stringify(body) }); }
+
+// ── Today ──
+let todayCatalog = [];
+async function loadToday() {
+  const el = document.getElementById('todayContent');
+  try {
+    const ov = await apiGet(DATA + '/overview');
+    const cat = await apiGet(DATA + '/catalog');
+    todayCatalog = cat.catalog || [];
+    renderToday(el, ov);
+  } catch (e) { el.innerHTML = '<p class="error">' + e.message + '</p>'; }
+}
+
+function renderToday(el, ov) {
+  let html = '<div class="card"><div class="row sb"><span>Total XP</span><strong>' + ov.totalXP + '</strong></div>';
+  html += '<div class="row"><span>Rank</span><strong>' + e(ov.rank.name) + '</strong></div></div>';
+
+  const featured = ov.villains.filter(v => v.slot === 'featured' && !isDead(v));
+  const heavies = ov.villains.filter(v => v.slot === 'constant_heavy');
+  const minions = ov.villains.filter(v => v.slot === 'constant_minion');
+  const custom = ov.villains.filter(v => !v.slot || v.slot === '');
+
+  if (featured.length) {
+    const v = featured[0];
+    html += renderVillainCard(v, true);
+  }
+  for (const v of heavies) { html += renderVillainCard(v, false); }
+  for (const v of minions) { html += renderVillainCard(v, false, true); }
+  for (const v of custom) { html += renderVillainCard(v, false); }
+
+  html += '<div class="row" style="margin-top:8px">';
+  html += '<button onclick="doEncounter()">New Opposition</button>';
+  html += '<button class="secondary" onclick="showAddVillain()">Create Villain</button>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+function isDead(v) { return v.hp <= 0; }
+
+function renderVillainCard(v, isFeatured, isMinion) {
+  const dead = isDead(v);
+  let h = '<div class="card">';
+  h += '<div class="row sb"><strong>' + e(v.name) + '</strong>';
+  if (v.tier) h += '<span style="font-size:12px;color:var(--oxblood-text);text-transform:uppercase">' + e(tierLabel(v.tier)) + '</span>';
+  h += '</div>';
+
+  // Show description from catalog lookup or constant foes
+  let desc = null;
+  if (v.catalog_uuid) {
+    const cat = todayCatalog.find(c => c.uuid === v.catalog_uuid);
+    if (cat && cat.description) desc = cat.description;
+  }
+  if (!desc && v.slot === 'constant_heavy') desc = 'Iron left out in the rain doesn\u2019t rust overnight\u2014it fades one thin layer at a time. Three days off is all it takes for the joints to stiffen. Get back under the bar before the surface hardens.';
+  if (!desc && v.slot === 'constant_minion') desc = 'Your body runs on water the way an engine runs on oil. When the tank runs low, everything grinds a little harder. Fill up before you start the engine.';
+  if (desc) h += '<div class="card-desc">' + e(desc) + '</div>';
+
+  if (!dead) {
+    const pct = hpPct(v.hp, v.max_hp);
+    h += '<div class="hpbar ' + hpColor(v.hp, v.max_hp) + '"><div style="width:' + pct + '%"></div></div>';
+    h += '<div class="row sb"><span class="hp-label">' + v.hp + ' / ' + v.max_hp + '</span>';
+    h += '<span class="hp-label">' + pct + '%</span></div>';
+  } else {
+    h += '<div class="defeated-stamp">DEFEATED</div>';
+  }
+  if (!dead) {
+    h += '<div class="row" style="margin-top:6px">';
+    if (isFeatured) h += '<button class="small" onclick="doGlancingBlow(' + jsArg(v.uuid) + ')">Glancing Blow</button>';
+    // The Drought (constant_minion) is weakened only by water — never a training session.
+    if (!v.builtin_id && !isMinion) { h += '<button class="small secondary" onclick="showLogSession(' + jsArg(v.uuid) + ',' + jsArg(v.name) + ')">Log Session</button>'; }
+    if (isMinion) h += '<button class="small secondary" onclick="doWater()">+8 oz</button>';
+    h += '<button class="small secondary" onclick="doConfession(' + jsArg(v.uuid) + ')">Report Slip</button>';
+    h += '</div>';
+  }
+  if (!dead) h += '<button class="small danger" style="margin-top:4px" onclick="doArchive(' + jsArg(v.uuid) + ')">Archive</button>';
+  h += '</div>';
+  return h;
+}
+
+function tierLabel(t) {
+  if (t === 'miniboss') return 'Mini-boss';
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+async function doGlancingBlow(uuid) {
+  try {
+    await apiPost(COMBAT + '/glancing-blow', { villainUUID:uuid });
+    toast('Glancing blow delivered');
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+async function doConfession(uuid) {
+  try {
+    await apiPost(COMBAT + '/confession', { villainUUID:uuid });
+    toast('Slip reported — honesty logged');
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+async function doWater() {
+  try {
+    await apiPost(DATA + '/water', { oz:8 });
+    toast('Water logged');
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+async function doEncounter() {
+  try {
+    const r = await apiPost(DATA + '/encounter', {});
+    toast('New opposition arrived: ' + r.villain.name);
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+async function doArchive(uuid) {
+  try {
+    await apiPost(DATA + '/villains/' + uuid + '/archive', {});
+    toast('Villain archived');
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+function showLogSession(uuid, name) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Log Session — ' + e(name) + '</h3>' +
+    '<div class="row"><label>Duration (min): <input id="logDur" type="number" value="45" min="5" max="180" style="width:80px"></label></div>' +
+    '<div class="row"><select id="logType"><option value="fullScheduled">Full Session</option><option value="shortSession">Short Session</option><option value="mobilityRecovery">Recovery</option></select></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doLogSession(' + jsArg(uuid) + ')">Log</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doLogSession(uuid) {
+  const dur = parseInt(document.getElementById('logDur').value) || 45;
+  const type = document.getElementById('logType').value;
+  try {
+    await apiPost(DATA + '/sessions', { villainUUID:uuid, durationMinutes:dur, sessionType:type });
+    closeModal();
+    toast('Session logged');
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+function showAddVillain() {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Create Villain</h3>' +
+    '<div class="row"><input id="newVName" placeholder="Name" style="flex:1"></div>' +
+    '<div class="row"><input id="newVHP" type="number" placeholder="Max HP" value="100" style="width:100px"></div>' +
+    '<div class="row"><select id="newVTier"><option value="">No tier</option><option value="minion">Minion</option><option value="heavy">Heavy</option><option value="miniboss">Mini-boss</option><option value="boss">Boss</option></select></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddVillain()">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddVillain() {
+  const name = document.getElementById('newVName').value.trim();
+  const hp = parseInt(document.getElementById('newVHP').value) || 100;
+  const tier = document.getElementById('newVTier').value || undefined;
+  if (!name) return toast('Name required');
+  try {
+    await apiPost(DATA + '/villains', { name, maxHP:hp, tier });
+    closeModal();
+    toast('Villain created');
+    loadToday();
+  } catch (e) { toast(e.message); }
+}
+
+// ── Calendar ──
+let calYear, calMonth;
+let calOccurrences = []; // cached for day detail
+function loadCalendar() {
+  const now = new Date();
+  if (!calYear) { calYear = now.getFullYear(); calMonth = now.getMonth() + 1; }
+  renderCalendar();
+}
+function calPrev() { if (--calMonth < 1) { calMonth = 12; calYear--; } calOccurrences = []; renderCalendar(); }
+function calNext() { if (++calMonth > 12) { calMonth = 1; calYear++; } calOccurrences = []; renderCalendar(); }
+
+async function renderCalendar() {
+  const ym = calYear + '-' + String(calMonth).padStart(2, '0');
+  document.getElementById('calLabel').textContent = ym;
+  try {
+    const data = await apiGet(DATA + '/schedule?month=' + ym);
+    calOccurrences = data.occurrences || [];
+    const byDay = {};
+    for (const o of calOccurrences) {
+      const d = new Date(o.date).getDate();
+      byDay[d] = byDay[d] || { has:false, done:false };
+      byDay[d].has = true;
+      if (o.done) byDay[d].done = true;
+    }
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+    const firstDow = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
+    let html = '';
+    for (const h of ['M','T','W','T','F','S','S']) html += '<div class="day-head">' + h + '</div>';
+    for (let i = 0; i < firstDow; i++) html += '<div class="day"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const b = byDay[d];
+      let cls = 'day';
+      if (b && b.done) cls += ' done';
+      else if (b && b.has) cls += ' has';
+      html += '<div class="' + cls + '" onclick="showDayDetail(' + d + ')" data-day="' + d + '">' + d + '</div>';
+    }
+    document.getElementById('calGrid').innerHTML = html;
+    document.getElementById('calDetail').style.display = 'none';
+  } catch (e) {
+    document.getElementById('calGrid').innerHTML = '<p class="error">' + e.message + '</p>';
+  }
+}
+
+function showDayDetail(day) {
+  const msDate = new Date(calYear, calMonth - 1, day).getTime();
+  const dayOccs = calOccurrences.filter(o => {
+    const od = new Date(o.date);
+    return od.getFullYear() === calYear && od.getMonth() === calMonth - 1 && od.getDate() === day;
+  });
+  const activeOccs = dayOccs.filter(o => !o.done);
+  const doneOccs = dayOccs.filter(o => o.done);
+
+  let html = '<div class="day-detail"><h3>' + calYear + '-' + String(calMonth).padStart(2,'0') + '-' + String(day).padStart(2,'0') + '</h3>';
+
+  const dateKey = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+
+  if (activeOccs.length) {
+    html += '<div class="section"><h4>Scheduled</h4>';
+    for (const o of activeOccs) {
+      const rule = (o.source && o.source.type === 'rule') ? o.source.rule : null;
+      const ruleUUID = rule ? rule.uuid : '';
+      const ruleName = rule ? (rule.name || '') : '';
+      const sagaName = (o.source && o.source.sagaName) ? o.source.sagaName : '';
+      const pwUUID = o.plannedWorkoutUUID || '';
+      const sub = ruleName ? ' (Rule: ' + e(ruleName) + ')' : (sagaName ? ' (Saga: ' + e(sagaName) + ')' : '');
+      html += '<div class="item"><div class="row sb">';
+      html += '<span>' + e(o.name || 'Session') + sub + '</span>';
+      html += '<span>';
+      html += '<button class="small" onclick="doCompleteSession(' + jsArg(ruleUUID) + ',' + jsArg(pwUUID) + ',' + jsArg(dateKey) + ')">Complete Session</button>';
+      if (ruleUUID) html += ' <button class="small secondary" onclick="showEditRule(' + jsArg(ruleUUID) + ',' + jsArg(ruleName) + ',' + day + ',' + jsArg(rule.recurrence || 'once') + ',' + Number(rule.interval_days || 1) + ')">Edit</button>';
+      if (ruleUUID) html += ' <button class="small danger" onclick="doDeleteRule(' + jsArg(ruleUUID) + ')">Delete</button>';
+      html += '</span></div></div>';
+    }
+    html += '</div>';
+  }
+
+  if (doneOccs.length) {
+    html += '<div class="section"><h4>Completed (' + doneOccs.length + ')</h4>';
+    for (const o of doneOccs) {
+      html += '<div class="item"><span style="color:var(--green)">&#10003;</span> ' + e(o.name || 'Session') + '</div>';
+    }
+    html += '</div>';
+  }
+
+  if (!activeOccs.length && !doneOccs.length) {
+    html += '<p class="msg">No sessions scheduled for this day.</p>';
+  }
+
+  html += '<div class="row" style="margin-top:8px"><button class="small" onclick="showAddRule(' + day + ')">+ Schedule Rule</button></div>';
+  html += '<div style="margin-top:8px"><button class="small secondary" onclick="document.getElementById(\'calDetail\').style.display=\'none\'">Close</button></div>';
+  html += '</div>';
+
+  document.getElementById('calDetail').innerHTML = html;
+  document.getElementById('calDetail').style.display = 'block';
+  document.querySelectorAll('.cal-grid .day.selected').forEach(d => d.classList.remove('selected'));
+  const clickedEl = document.querySelector('.cal-grid .day[data-day="' + day + '"]');
+  if (clickedEl) clickedEl.classList.add('selected');
+}
+
+async function doCompleteSession(ruleUUID, plannedWorkoutUUID, dateKey) {
+  try {
+    const dur = prompt('Duration in minutes?', '45');
+    if (!dur) return;
+    const durNum = parseInt(dur) || 45;
+    const type = durNum >= 30 ? 'fullScheduled' : 'shortSession';
+    // Target the featured foe (the phone's primary target); the server applies the
+    // 3-day chain to the constant heavy automatically. Fall back to the heavy only if
+    // no featured foe is live, so the session still logs.
+    const ov = await apiGet(DATA + '/overview');
+    let target = ov.villains.find(v => v.slot === 'featured' && v.hp > 0)
+      || ov.villains.find(v => v.slot === 'constant_heavy' && v.hp > 0);
+    if (!target) { toast('No active foe to fight.'); return; }
+    const body = {
+      villainUUID: target.uuid, durationMinutes: durNum, sessionType: type,
+      scheduleRuleUUID: ruleUUID || null,
+      plannedWorkoutUUID: plannedWorkoutUUID || null,
+      scheduledDate: dateKey || null, // date-string key, matches expandOccurrences done-matching
+    };
+    await apiPost(DATA + '/sessions', body);
+    toast('Session completed');
+    calOccurrences = []; // force refresh
+    renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+function showAddRule(day) {
+  const dateStr = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  document.getElementById('modalContent').innerHTML =
+    '<h3>New Schedule Rule</h3>' +
+    '<div class="row"><input id="srName" placeholder="Rule name" style="flex:1"></div>' +
+    '<div class="row"><input id="srDate" type="date" value="' + dateStr + '"></div>' +
+    '<div class="row"><select id="srRecur"><option value="once">Once</option><option value="weekly">Weekly</option><option value="custom">Custom (N days)</option></select></div>' +
+    '<div class="row" id="srIntervalRow" style="display:none"><input id="srInterval" type="number" placeholder="Interval (days)" value="1" style="width:100px"></div>' +
+    '<div class="row" id="srWeekdayRow" style="display:none"></div>' +
+    '<div class="row"><input id="srEnd" type="date" placeholder="End date (optional)"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddRule()">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('srRecur').onchange = function() {
+    document.getElementById('srIntervalRow').style.display = this.value === 'custom' ? 'flex' : 'none';
+  };
+  document.getElementById('modal').style.display = 'flex';
+}
+
+// Maps the form's once/weekly/custom to the server's recurrence model
+// (expandRule knows once | interval | weekly). Weekly derives its weekday_mask
+// from the start date's weekday (0=Mon..6=Sun) so the rule actually expands.
+function recurrenceFields(rec, sd, intervalVal) {
+  const out = { recurrence: rec === 'custom' ? 'interval' : rec };
+  if (rec === 'custom') out.intervalDays = parseInt(intervalVal) || 1;
+  if (rec === 'weekly') {
+    const d = new Date(sd + 'T00:00:00');
+    if (!isNaN(d.getTime())) out.weekdayMask = 1 << ((d.getDay() + 6) % 7);
+  }
+  return out;
+}
+
+async function doAddRule() {
+  const name = document.getElementById('srName').value.trim();
+  const sd = document.getElementById('srDate').value;
+  const rec = document.getElementById('srRecur').value;
+  if (!name || !sd) return toast('Name and start date required');
+  try {
+    const iv = document.getElementById('srInterval');
+    const rf = recurrenceFields(rec, sd, iv ? iv.value : 1);
+    const body = { name, startDate: sd, recurrence: rf.recurrence };
+    if (rf.intervalDays !== undefined) body.intervalDays = rf.intervalDays;
+    if (rf.weekdayMask !== undefined) body.weekdayMask = rf.weekdayMask;
+    if (document.getElementById('srEnd').value) body.endDate = document.getElementById('srEnd').value;
+    await apiPost(DATA + '/schedule-rules', body);
+    closeModal();
+    toast('Rule created');
+    calOccurrences = []; renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+function showEditRule(uuid, currentName, day, recurrence, intervalDays) {
+  const dateStr = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  const selRec = recurrence === 'interval' ? 'custom' : (recurrence || 'once');
+  const opt = (v, label) => '<option value="' + v + '"' + (selRec === v ? ' selected' : '') + '>' + label + '</option>';
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Edit Rule</h3>' +
+    '<div class="row"><input id="srName" placeholder="Rule name" value="' + e(currentName) + '" style="flex:1"></div>' +
+    '<div class="row"><input id="srDate" type="date" value="' + dateStr + '"></div>' +
+    '<div class="row"><select id="srRecur">' + opt('once', 'Once') + opt('weekly', 'Weekly') + opt('custom', 'Custom (N days)') + '</select></div>' +
+    '<div class="row" id="srIntervalRow" style="display:' + (selRec === 'custom' ? 'flex' : 'none') + '"><input id="srInterval" type="number" placeholder="Interval (days)" value="' + Number(intervalDays || 1) + '" style="width:100px"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doSaveRule(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('srRecur').onchange = function() {
+    document.getElementById('srIntervalRow').style.display = this.value === 'custom' ? 'flex' : 'none';
+  };
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doSaveRule(uuid) {
+  const name = document.getElementById('srName').value.trim();
+  const sd = document.getElementById('srDate').value;
+  const rec = document.getElementById('srRecur').value;
+  if (!name || !sd) return toast('Name and start date required');
+  try {
+    const iv = document.getElementById('srInterval');
+    const rf = recurrenceFields(rec, sd, iv ? iv.value : 1);
+    // null (not undefined) clears the field the new recurrence doesn't use, so
+    // switching once<->weekly<->custom doesn't leave a stale mask/interval behind.
+    const body = {
+      name, start_date: sd, recurrence: rf.recurrence,
+      interval_days: rf.intervalDays !== undefined ? rf.intervalDays : null,
+      weekday_mask: rf.weekdayMask !== undefined ? rf.weekdayMask : null,
+    };
+    await apiPut(DATA + '/schedule-rules/' + uuid, body);
+    closeModal();
+    toast('Rule saved');
+    calOccurrences = []; renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+async function doDeleteRule(uuid) {
+  if (!confirm('Delete this schedule rule?')) return;
+  try {
+    await api(DATA + '/schedule-rules/' + uuid, { method: 'DELETE' });
+    toast('Rule deleted');
+    calOccurrences = []; renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+// ── Sagas ──
+async function loadSagas() {
+  const el = document.getElementById('sagasContent');
+  try {
+    const data = await apiGet(DATA + '/sagas');
+    let html = '';
+    for (const s of (data.sagas || [])) {
+      html += '<div class="card">';
+      html += '<div class="row sb"><strong>' + e(s.name) + '</strong>';
+      html += '<button class="small secondary" onclick="showEditSaga(' + jsArg(s.uuid) + ',' + jsArg(s.name) + ',' + jsArg(s.description||'') + ',' + jsArg(s.start_date||'') + ',' + jsArg(s.current_chapter_uuid||'') + ')">Edit</button>';
+      html += '</div>';
+      if (s.start_date) html += '<div style="font-size:12px;color:var(--text-dim)">Start date: ' + e(s.start_date) + '</div>';
+      if (s.description) html += '<p class="msg">' + e(s.description) + '</p>';
+
+      if (s.chapters && s.chapters.length) {
+        html += '<table><thead><tr><th>Chapter</th><th>Week</th><th>Workouts</th><th></th></tr></thead><tbody>';
+        for (const ch of s.chapters) {
+          const wpw = (s.plannedWorkouts || []).filter(p => p.chapter_uuid === ch.uuid);
+          const isCurrent = s.current_chapter_uuid === ch.uuid;
+          html += '<tr><td>' + e(ch.name) + (isCurrent ? ' <span style="color:var(--green);font-size:11px">CURRENT</span>' : '') + '</td>';
+          html += '<td>' + ch.week_index + '</td>';
+          html += '<td>' + wpw.map(p => e(p.name) + ' <span style="font-size:10px;color:var(--text-dim)">[Day ' + (p.day_index || 0) + ']</span> <a href="#" onclick="showEditPW(' + jsArg(p.uuid) + ',' + jsArg(p.name) + ',' + (p.day_index||0) + ');return false" style="font-size:10px">edit</a> <a href="#" onclick="doDeletePW(' + jsArg(p.uuid) + ');return false" style="font-size:10px;color:var(--red)">del</a>') + ' ' + '</td>';
+          html += '<td>';
+          html += '<button class="small secondary" onclick="showEditChapter(' + jsArg(ch.uuid) + ',' + jsArg(ch.name) + ',' + ch.week_index + ')">Edit</button> ';
+          if (!isCurrent) html += '<button class="small secondary" onclick="doSetCurrentChapter(' + jsArg(s.uuid) + ',' + jsArg(ch.uuid) + ')">Set Current</button> ';
+          html += '<button class="small danger" onclick="doDeleteChapter(' + jsArg(ch.uuid) + ')">Del</button>';
+          html += '</td></tr>';
+        }
+        html += '</tbody></table>';
+      }
+      html += '<div class="row" style="margin-top:6px">';
+      html += '<button class="small" onclick="showAddChapter(' + jsArg(s.uuid) + ')">+ Chapter</button>';
+      html += '</div>';
+      html += '</div>';
+    }
+    el.innerHTML = html || '<p class="msg">No sagas yet.</p>';
+  } catch (e) { el.innerHTML = '<p class="error">' + e.message + '</p>'; }
+}
+
+function showAddSaga() {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>New Saga</h3>' +
+    '<div class="row"><input id="newSName" placeholder="Saga name" style="flex:1"></div>' +
+    '<div class="row"><input id="newSDesc" placeholder="Description (optional)" style="flex:1"></div>' +
+    '<div class="row"><input id="newSDate" type="date" placeholder="Start date"> <span class="msg" style="font-size:11px">Start date puts this saga on the calendar</span></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddSaga()">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddSaga() {
+  const name = document.getElementById('newSName').value.trim();
+  const desc = document.getElementById('newSDesc').value.trim();
+  const sd = document.getElementById('newSDate').value;
+  if (!name) return toast('Name required');
+  try {
+    await apiPost(DATA + '/sagas', { name, description: desc || undefined, startDate: sd || undefined });
+    closeModal();
+    toast('Saga created');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+function showEditSaga(uuid, name, desc, startDate, currentChapter) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Edit Saga</h3>' +
+    '<div class="row"><input id="edSName" placeholder="Saga name" value="' + e(name) + '" style="flex:1"></div>' +
+    '<div class="row"><input id="edSDesc" placeholder="Description" value="' + e(desc) + '" style="flex:1"></div>' +
+    '<div class="row"><input id="edSDate" type="date" value="' + e(startDate) + '"> <span class="msg" style="font-size:11px">Start date puts this saga on the calendar</span></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doSaveSaga(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doSaveSaga(uuid) {
+  const name = document.getElementById('edSName').value.trim();
+  const desc = document.getElementById('edSDesc').value.trim();
+  const sd = document.getElementById('edSDate').value;
+  if (!name) return toast('Name required');
+  try {
+    await apiPut(DATA + '/sagas/' + uuid, { name, description: desc || undefined, start_date: sd || undefined });
+    closeModal();
+    toast('Saga saved');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+function showAddChapter(sagaUUID) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>New Chapter</h3>' +
+    '<div class="row"><input id="chName" placeholder="Chapter name" style="flex:1"></div>' +
+    '<div class="row"><input id="chWeek" type="number" placeholder="Week index" value="0" style="width:80px"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddChapter(' + jsArg(sagaUUID) + ')">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddChapter(sagaUUID) {
+  const name = document.getElementById('chName').value.trim();
+  const week = parseInt(document.getElementById('chWeek').value) || 0;
+  if (!name) return toast('Name required');
+  try {
+    await apiPost(DATA + '/chapters', { sagaUUID, name, weekIndex: week });
+    closeModal();
+    toast('Chapter created');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+function showEditChapter(uuid, name, weekIndex) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Edit Chapter</h3>' +
+    '<div class="row"><input id="chName" placeholder="Chapter name" value="' + e(name) + '" style="flex:1"></div>' +
+    '<div class="row"><input id="chWeek" type="number" placeholder="Week index" value="' + weekIndex + '" style="width:80px"></div>' +
+    '<div class="row"><h4 style="width:100%;margin-top:8px;font-size:12px;color:var(--gray)">Planned Workouts</h4></div>';
+  document.getElementById('modalContent').innerHTML +=
+    '<div class="row"><button class="small" onclick="showAddPW(' + jsArg(uuid) + ')">+ Add Workout</button></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doSaveChapter(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doSaveChapter(uuid) {
+  const name = document.getElementById('chName').value.trim();
+  const week = parseInt(document.getElementById('chWeek').value) || 0;
+  if (!name) return toast('Name required');
+  try {
+    await apiPut(DATA + '/chapters/' + uuid, { name, week_index: week });
+    closeModal();
+    toast('Chapter saved');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+async function doDeleteChapter(uuid) {
+  if (!confirm('Delete this chapter and all its planned workouts?')) return;
+  try {
+    await api(DATA + '/chapters/' + uuid, { method: 'DELETE' });
+    toast('Chapter deleted');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+async function doSetCurrentChapter(sagaUUID, chapterUUID) {
+  try {
+    await apiPut(DATA + '/sagas/' + sagaUUID, { current_chapter_uuid: chapterUUID });
+    toast('Current chapter set');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+function showAddPW(chapterUUID) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>New Planned Workout</h3>' +
+    '<div class="row"><input id="pwName" placeholder="Workout name" style="flex:1"></div>' +
+    '<div class="row"><input id="pwDay" type="number" placeholder="Day index" value="0" style="width:80px"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddPW(' + jsArg(chapterUUID) + ')">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddPW(chapterUUID) {
+  const name = document.getElementById('pwName').value.trim();
+  const day = parseInt(document.getElementById('pwDay').value) || 0;
+  if (!name) return toast('Name required');
+  try {
+    await apiPost(DATA + '/planned-workouts', { chapterUUID, name, dayIndex: day });
+    closeModal();
+    toast('Workout created');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+function showEditPW(uuid, name, dayIndex) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Edit Planned Workout</h3>' +
+    '<div class="row"><input id="pwName" placeholder="Workout name" value="' + e(name) + '" style="flex:1"></div>' +
+    '<div class="row"><input id="pwDay" type="number" placeholder="Day index" value="' + dayIndex + '" style="width:80px"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doSavePW(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doSavePW(uuid) {
+  const name = document.getElementById('pwName').value.trim();
+  const day = parseInt(document.getElementById('pwDay').value) || 0;
+  if (!name) return toast('Name required');
+  try {
+    await apiPut(DATA + '/planned-workouts/' + uuid, { name, day_index: day });
+    closeModal();
+    toast('Workout saved');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+async function doDeletePW(uuid) {
+  if (!confirm('Delete this planned workout?')) return;
+  try {
+    await api(DATA + '/planned-workouts/' + uuid, { method: 'DELETE' });
+    toast('Workout deleted');
+    loadSagas();
+  } catch (e) { toast(e.message); }
+}
+
+// ── History ──
+let histYear, histMonth;
+function loadHistory() {
+  const now = new Date();
+  if (!histYear) { histYear = now.getFullYear(); histMonth = now.getMonth() + 1; }
+  renderHistory();
+}
+function histPrev() { if (--histMonth < 1) { histMonth = 12; histYear--; } renderHistory(); }
+function histNext() { if (++histMonth > 12) { histMonth = 1; histYear++; } renderHistory(); }
+
+async function renderHistory() {
+  const ym = histYear + '-' + String(histMonth).padStart(2, '0');
+  document.getElementById('histLabel').textContent = ym;
+  try {
+    const data = await apiGet(DATA + '/history?month=' + ym);
+    const daysInMonth = data.daysInMonth;
+    const firstDow = data.firstWeekday;
+    const buckets = data.dayBuckets || [];
+    const byDay = {};
+    for (const b of buckets) { byDay[b.day] = b; }
+
+    let html = '';
+    for (const h of ['M','T','W','T','F','S','S']) html += '<div class="day-head">' + h + '</div>';
+    for (let i = 0; i < firstDow; i++) html += '<div class="day"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const b = byDay[d];
+      let cls = 'day';
+      let title = '';
+      if (b && b.sessions > 0) { cls += ' has'; title = b.sessions + ' sessions, ' + b.xp + ' XP'; }
+      html += '<div class="' + cls + '"' + (title ? ' title="' + title + '"' : '') + '>' + d + '</div>';
+    }
+    document.getElementById('histGrid').innerHTML = html;
+    document.getElementById('histTotals').innerHTML =
+      '<div class="card"><div class="row">' +
+      '<span>Sessions: <strong>' + data.totalSessions + '</strong></span>' +
+      '<span>XP: <strong>' + data.totalXP + '</strong></span>' +
+      '<span>Sets: <strong>' + (data.setLogCount || 0) + '</strong></span>' +
+      '<span>Measurements: <strong>' + (data.measurementCount || 0) + '</strong></span>' +
+      '</div></div>';
+  } catch (e) {
+    document.getElementById('histGrid').innerHTML = '<p class="error">' + e.message + '</p>';
+  }
+}
+
+// ── Roster ──
+async function loadRoster() {
+  const el = document.getElementById('rosterContent');
+  try {
+    const data = await apiGet(DATA + '/catalog');
+    const catalog = data.catalog || [];
+    const tiers = { minion:'Minions', heavy:'Heavies', miniboss:'Mini-bosses', boss:'Bosses' };
+    let html = '';
+    for (const [tier, label] of Object.entries(tiers)) {
+      const entries = catalog.filter(e => e.tier === tier);
+      if (!entries.length) continue;
+      html += '<h3>' + label + '</h3>';
+      for (const entry of entries) {
+        html += '<div class="card"><div class="row sb">';
+        html += '<div><strong>' + e(entry.name) + '</strong>';
+        if (entry.builtin_id) html += ' <span style="font-size:11px;color:var(--text-dim)">(built-in)</span>';
+        html += '</div>';
+        html += '<div class="row">';
+        html += '<span style="font-size:12px">HP: ' + Number(entry.max_hp) + '</span>';
+        html += '<span style="font-size:12px">XP: ' + Number(entry.xp_reward) + '</span>';
+        html += '<span style="font-size:12px">Weight: ' + Number(entry.encounter_weight) + '</span>';
+        html += '</div></div>';
+        if (entry.description) html += '<div class="card-desc">' + e(entry.description) + '</div>';
+        html += '<div class="row" style="margin-top:4px">';
+        html += '<button class="small ' + (entry.enabled ? 'secondary' : '') + '" onclick="doToggleFoe(' + jsArg(entry.uuid) + ',' + !!(!entry.enabled) + ')">' + (entry.enabled ? 'Disable' : 'Enable') + '</button>';
+        if (!entry.builtin_id) html += '<button class="small secondary" onclick="showEditFoe(' + jsArg(entry.uuid) + ',' + jsArg(entry.name) + ',' + Number(entry.max_hp) + ',' + Number(entry.xp_reward) + ',' + Number(entry.encounter_weight) + ',' + jsArg(entry.tier) + ')">Edit</button>';
+        if (!entry.builtin_id) html += '<button class="small danger" onclick="doDeleteFoe(' + jsArg(entry.uuid) + ',' + jsArg(entry.name) + ')">Delete</button>';
+        html += '</div></div>';
+      }
+    }
+    el.innerHTML = html || '<p class="msg">No catalog entries.</p>';
+  } catch (e) { el.innerHTML = '<p class="error">' + e.message + '</p>'; }
+}
+
+async function doToggleFoe(uuid, enabled) {
+  try {
+    await apiPut(DATA + '/catalog/' + uuid, { enabled });
+    loadRoster();
+  } catch (e) { toast(e.message); }
+}
+
+async function doDeleteFoe(uuid, name) {
+  if (!confirm('Delete "' + name + '" from the roster? This cannot be undone.')) return;
+  try {
+    await apiPut(DATA + '/catalog/' + uuid, { deleted: true });
+    toast('Foe deleted');
+    loadRoster();
+  } catch (e) { toast(e.message); }
+}
+
+function showAddFoe() {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Custom Foe</h3>' +
+    '<div class="row"><input id="newFName" placeholder="Name" style="flex:1"></div>' +
+    '<div class="row"><input id="newFHP" type="number" placeholder="Max HP" value="100" style="width:100px"><input id="newFXP" type="number" placeholder="XP Reward" value="50" style="width:100px"><input id="newFWt" type="number" placeholder="Weight" value="30" style="width:100px"></div>' +
+    '<div class="row"><select id="newFTier"><option value="minion">Minion</option><option value="heavy">Heavy</option><option value="miniboss">Mini-boss</option><option value="boss">Boss</option></select></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddFoe()">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddFoe() {
+  const name = document.getElementById('newFName').value.trim();
+  const hp = parseInt(document.getElementById('newFHP').value) || 100;
+  const xp = parseInt(document.getElementById('newFXP').value) || 50;
+  const wt = parseInt(document.getElementById('newFWt').value) || 30;
+  const tier = document.getElementById('newFTier').value;
+  if (!name) return toast('Name required');
+  try {
+    await apiPost(DATA + '/catalog', { name, maxHP:hp, xpReward:xp, encounterWeight:wt, tier });
+    closeModal();
+    toast('Foe created');
+    loadRoster();
+  } catch (e) { toast(e.message); }
+}
+
+function showEditFoe(uuid, name, hp, xp, wt, tier) {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>Edit ' + e(name) + '</h3>' +
+    '<div class="row"><input id="edFName" placeholder="Name" value="' + e(name) + '" style="flex:1"></div>' +
+    '<div class="row"><input id="edFHP" type="number" placeholder="Max HP" value="' + hp + '" style="width:100px"><input id="edFXP" type="number" placeholder="XP Reward" value="' + xp + '" style="width:100px"><input id="edFWt" type="number" placeholder="Weight" value="' + wt + '" style="width:100px"></div>' +
+    '<div class="row"><select id="edFTier">' +
+    ['minion','heavy','miniboss','boss'].map(t => '<option value="' + t + '"' + (t === tier ? ' selected' : '') + '>' + tierLabel(t) + '</option>').join('') +
+    '</select></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doEditFoe(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doEditFoe(uuid) {
+  const name = document.getElementById('edFName').value.trim();
+  const hp = parseInt(document.getElementById('edFHP').value) || 100;
+  const xp = parseInt(document.getElementById('edFXP').value) || 50;
+  const wt = parseInt(document.getElementById('edFWt').value) || 30;
+  const tier = document.getElementById('edFTier').value;
+  if (!name) return toast('Name required');
+  try {
+    await apiPut(DATA + '/catalog/' + uuid, { name, max_hp:hp, xp_reward:xp, encounter_weight:wt, tier });
+    closeModal();
+    toast('Foe updated');
+    loadRoster();
+  } catch (e) { toast(e.message); }
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+// ── Console tab ──
+const fmt = t => t ? new Date(t).toLocaleString() : '—';
 
 async function createPairing() {
-  const msg = document.getElementById("pairMsg");
+  const msg = document.getElementById('pairMsg');
   try {
-    const r = await fetch(API + "/pairings", { method:"POST", headers: hdr() });
-    if (!r.ok) throw new Error(r.status === 401 ? "Bad owner key" : "HTTP " + r.status);
+    const r = await fetch(OWNER + '/pairings', { method:'POST', headers:apiHdr() });
+    if (!r.ok) throw new Error(r.status === 401 ? 'Unauthorized' : 'HTTP ' + r.status);
     const d = await r.json();
-    document.getElementById("phrase").textContent = d.phrase;
-    document.getElementById("qrBox").innerHTML = generateQRSvg(d.phrase, 3);
-    document.getElementById("expiry").textContent = fmt(d.expiresAt);
-    document.getElementById("phraseBox").style.display = "block";
+    document.getElementById('phrase').textContent = d.phrase;
+    document.getElementById('qrBox').innerHTML = generateQRSvg(d.phrase, 3);
+    document.getElementById('expiry').textContent = fmt(d.expiresAt);
+    document.getElementById('phraseBox').style.display = 'block';
     var expiresIn = d.expiresAt - Date.now();
     if (expiresIn > 0) {
-      setTimeout(function () { document.getElementById("phraseBox").style.display = "none"; }, expiresIn);
+      setTimeout(function () { document.getElementById('phraseBox').style.display = 'none'; }, expiresIn);
     }
-    msg.textContent = "";
+    msg.textContent = '';
   } catch (e) { msg.textContent = e.message; }
 }
 
 async function loadDevices() {
-  const authMsg = document.getElementById("authMsg");
+  const authMsg = document.getElementById('pairMsg');
   try {
-    const r = await fetch(API + "/devices", { headers: hdr() });
-    if (!r.ok) throw new Error(r.status === 401 ? "Bad owner key" : "HTTP " + r.status);
+    const r = await fetch(OWNER + '/devices', { headers:apiHdr() });
+    if (!r.ok) throw new Error(r.status === 401 ? 'Unauthorized' : 'HTTP ' + r.status);
     const { devices } = await r.json();
-    const tbody = document.getElementById("devices");
-    tbody.innerHTML = "";
+    const tbody = document.getElementById('devices');
+    tbody.innerHTML = '';
     for (const d of devices) {
-      const tr = document.createElement("tr");
-      if (d.revoked_at) tr.className = "revoked";
-      tr.innerHTML = `<td>${escapeHtml(d.device_name)}</td><td>${fmt(d.created_at)}</td><td>${fmt(d.last_seen_at)}</td>`;
-      const td = document.createElement("td");
+      const tr = document.createElement('tr');
+      if (d.revoked_at) tr.className = 'revoked';
+      tr.innerHTML = '<td>' + e(d.device_name) + '</td><td>' + fmt(d.created_at) + '</td><td>' + fmt(d.last_seen_at) + '</td>';
+      const td = document.createElement('td');
       if (!d.revoked_at) {
-        const b = document.createElement("button");
-        b.className = "secondary"; b.textContent = "Revoke";
+        const b = document.createElement('button');
+        b.className = 'small secondary'; b.textContent = 'Revoke';
         b.onclick = () => revokeDevice(d.id);
         td.appendChild(b);
-      } else { td.textContent = "revoked"; }
+      } else { td.textContent = 'revoked'; td.style.color = 'var(--gray)'; }
       tr.appendChild(td);
       tbody.appendChild(tr);
     }
-    authMsg.textContent = devices.length ? "" : "No devices yet.";
     startAutoRefresh();
-  } catch (e) { authMsg.textContent = e.message; stopAutoRefresh(); }
+  } catch (e) { stopAutoRefresh(); }
 }
 
 async function revokeDevice(id) {
   try {
-    const r = await fetch(API + "/devices/" + id + "/revoke", { method:"POST", headers: hdr() });
-    if (!r.ok) throw new Error("HTTP " + r.status);
+    const r = await fetch(OWNER + '/devices/' + id + '/revoke', { method:'POST', headers:apiHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     loadDevices();
-  } catch (e) { document.getElementById("authMsg").textContent = e.message; }
+  } catch (e) { toast(e.message); }
 }
-
-function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
 let autoRefreshTimer = null;
 function startAutoRefresh() {
   stopAutoRefresh();
   autoRefreshTimer = setInterval(function () {
-    if (document.visibilityState === 'visible' && keyEl().value) {
+    if (document.visibilityState === 'visible' && token) {
       loadDevices();
     }
   }, 15000);
 }
 function stopAutoRefresh() { if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; } }
 document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible' && keyEl().value) { loadDevices(); startAutoRefresh(); }
+  if (document.visibilityState === 'visible' && token) { loadDevices(); startAutoRefresh(); }
   else { stopAutoRefresh(); }
 });
 </script>

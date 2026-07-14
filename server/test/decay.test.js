@@ -8,8 +8,8 @@ import { applyBatch } from '../../questlog-critical/hlc-merge/merge.js';
 describe('Decay', () => {
   it('villain idle 15 days → heals and emits events', () => {
     const db = makeDb();
-    const now = Date.now();
-    const fifteenDaysAgo = now - (15 * 24 * 60 * 60 * 1000) - 1000;
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS
+    const fifteenDaysAgo = now - (15 * 24 * 60 * 60) - 1;
 
     seedVillain(db, 'p1', { uuid: 'v1', hp: 50, max_hp: 100, last_session_at: fifteenDaysAgo });
 
@@ -37,8 +37,8 @@ describe('Decay', () => {
 
   it('field_meta consistency: decay wins over lower device HLC', () => {
     const db = makeDb();
-    const now = Date.now();
-    const fifteenDaysAgo = now - (15 * 24 * 60 * 60 * 1000) - 1000;
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS
+    const fifteenDaysAgo = now - (15 * 24 * 60 * 60) - 1;
 
     seedVillain(db, 'p1', { uuid: 'v1', hp: 50, max_hp: 100, last_session_at: fifteenDaysAgo });
 
@@ -74,8 +74,8 @@ describe('Decay', () => {
 
   it('villain idle 10 days → untouched', () => {
     const db = makeDb();
-    const now = Date.now();
-    const tenDaysAgo = now - (10 * 24 * 60 * 60 * 1000);
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS
+    const tenDaysAgo = now - (10 * 24 * 60 * 60);
 
     seedVillain(db, 'p1', { uuid: 'v1', hp: 50, max_hp: 100, last_session_at: tenDaysAgo });
 
@@ -107,8 +107,8 @@ describe('Decay', () => {
 
   it('idempotent progression: two sweeps both heal, cap at max_hp', () => {
     const db = makeDb();
-    const now = Date.now();
-    const sixteenDaysAgo = now - (16 * 24 * 60 * 60 * 1000);
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS
+    const sixteenDaysAgo = now - (16 * 24 * 60 * 60);
 
     seedVillain(db, 'p1', { uuid: 'v1', hp: 90, max_hp: 100, last_session_at: sixteenDaysAgo });
 

@@ -35,10 +35,15 @@ export default function combatRoutes(db) {
     if (!villain) {
       return res.status(404).json({ error: 'villain not found' });
     }
+    // The Drought (constant_minion) is weakened only by hydration — a training session must never
+    // damage it (same invariant enforced on POST /data/sessions and in the iOS strike target).
+    if (villain.slot === 'constant_minion') {
+      return res.status(400).json({ error: 'This foe is weakened only by water.' });
+    }
 
     const result = combat.executeSession(villain, type);
 
-    const now = Date.now();
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS (device convention)
     db.prepare('UPDATE villains SET hp = ?, updated_at = ?, last_session_at = ? WHERE uuid = ? AND profile_uuid = ?')
       .run(villain.hp, now, now, villainUUID, req.profileUuid);
 
@@ -66,11 +71,15 @@ export default function combatRoutes(db) {
     if (!villain) {
       return res.status(404).json({ error: 'villain not found' });
     }
+    // A Glancing Blow is a training strike — never allowed against the water-only minion.
+    if (villain.slot === 'constant_minion') {
+      return res.status(400).json({ error: 'This foe is weakened only by water.' });
+    }
 
     const roll = glancingBlow.execute(villainUUID);
     const event = glancingBlow.buildEvent(villainUUID, roll);
 
-    const now = Date.now();
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS (device convention)
     db.prepare('UPDATE villains SET hp = MAX(0, hp - ?), updated_at = ? WHERE uuid = ? AND profile_uuid = ?')
       .run(roll.damage, now, villainUUID, req.profileUuid);
 
@@ -100,7 +109,7 @@ export default function combatRoutes(db) {
 
     const result = combat.confession(villain);
 
-    const now = Date.now();
+    const now = Math.floor(Date.now() / 1000); // domain timestamps are SECONDS (device convention)
     db.prepare('UPDATE villains SET hp = ?, updated_at = ? WHERE uuid = ? AND profile_uuid = ?')
       .run(villain.hp, now, villainUUID, req.profileUuid);
 

@@ -14,7 +14,7 @@ describe('Schema v7 (workout_templates + template_exercises)', () => {
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
     assert.ok(tables.includes('workout_templates'));
     assert.ok(tables.includes('template_exercises'));
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 8);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 18);
 
     const wtCols = db.pragma('table_info(workout_templates)').map(c => c.name);
     assert.ok(wtCols.includes('name'));

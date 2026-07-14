@@ -8,6 +8,9 @@ const INSERT_DEFAULTS = {
   exercises:     { name: '', deleted: 0 },
   workout_templates: { name: '', est_minutes: 0, deleted: 0 },
   template_exercises: { template_uuid: '', exercise_uuid: '', position: 0, deleted: 0 },
+  foe_catalog: { name: '', tier: 'minion', max_hp: 100, xp_reward: 50, encounter_weight: 30, enabled: 1, deleted: 0 },
+  planned_workouts: { chapter_uuid: '', day_index: 0, name: '', position: 0, deleted: 0 },
+  schedule_rules: { name: '', start_date: (new Date()).toISOString().slice(0,10), recurrence: 'once', deleted: 0 },
 };
 
 export class SqliteStorageAdapter {
@@ -89,6 +92,8 @@ export class SqliteStorageAdapter {
   }
 
   isDeleted(table, uuid) {
+    const entry = REGISTRY[table];
+    if (!entry || !entry.columns.includes('deleted')) return null;
     const row = this._prepare(
       `SELECT fm.hlc, fm.device_id FROM field_meta fm
        JOIN ${safeIdent(table)} t ON t.profile_uuid = fm.profile_uuid AND t.uuid = fm.row_uuid

@@ -14,7 +14,7 @@ describe('Schema v6 (exercises + set_logs)', () => {
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
     assert.ok(tables.includes('exercises'));
     assert.ok(tables.includes('set_logs'));
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 8);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 18);
 
     const exCols = db.pragma('table_info(exercises)').map(c => c.name);
     assert.ok(exCols.includes('name'));
@@ -63,6 +63,9 @@ describe('Schema v6 (exercises + set_logs)', () => {
         reps: 10,
         weight_kg: 60.0,
         rpe: 7.5,
+        completed: 1,
+        duration_sec: null,
+        distance_m: null,
         timestamp: 1700000000000,
         replaces_uuid: null,
       };
@@ -131,6 +134,9 @@ describe('Schema v6 (exercises + set_logs)', () => {
         reps: 5,
         weight_kg: 80,
         rpe: 8,
+        completed: 1,
+        duration_sec: null,
+        distance_m: null,
         timestamp: 1700000000000,
         replaces_uuid: null,
       };

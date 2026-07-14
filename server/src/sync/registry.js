@@ -3,13 +3,13 @@ import { APPEND_ONLY_TABLES } from '../../../questlog-critical/hlc-merge/merge.j
 export const REGISTRY = {
   villains: {
     appendOnly: false,
-    columns: ['uuid', 'name', 'hp', 'max_hp', 'active', 'created_at', 'updated_at', 'last_session_at', 'deleted', 'profile_uuid'],
-    mutableFields: ['name', 'hp', 'max_hp', 'active', 'last_session_at'],
+    columns: ['uuid', 'name', 'hp', 'max_hp', 'active', 'created_at', 'updated_at', 'last_session_at', 'deleted', 'tier', 'xp_reward', 'slot', 'catalog_uuid', 'profile_uuid'],
+    mutableFields: ['name', 'hp', 'max_hp', 'active', 'last_session_at', 'tier', 'xp_reward', 'slot', 'catalog_uuid'],
   },
   sagas: {
     appendOnly: false,
-    columns: ['uuid', 'name', 'description', 'active', 'created_at', 'updated_at', 'deleted', 'current_chapter_uuid', 'profile_uuid'],
-    mutableFields: ['name', 'description', 'active', 'current_chapter_uuid'],
+    columns: ['uuid', 'name', 'description', 'active', 'created_at', 'updated_at', 'deleted', 'current_chapter_uuid', 'start_date', 'profile_uuid'],
+    mutableFields: ['name', 'description', 'active', 'current_chapter_uuid', 'start_date'],
   },
   chapters: {
     appendOnly: false,
@@ -18,8 +18,8 @@ export const REGISTRY = {
   },
   sessions: {
     appendOnly: false,
-    columns: ['uuid', 'saga_uuid', 'chapter_uuid', 'villain_uuid', 'date', 'duration_minutes', 'status', 'session_type', 'xp_earned', 'combat_action_reason', 'created_at', 'profile_uuid'],
-    mutableFields: ['saga_uuid', 'chapter_uuid', 'villain_uuid', 'date', 'duration_minutes', 'status', 'session_type', 'xp_earned', 'combat_action_reason'],
+    columns: ['uuid', 'saga_uuid', 'chapter_uuid', 'villain_uuid', 'date', 'duration_minutes', 'status', 'session_type', 'xp_earned', 'combat_action_reason', 'created_at', 'schedule_rule_uuid', 'planned_workout_uuid', 'scheduled_date', 'profile_uuid'],
+    mutableFields: ['saga_uuid', 'chapter_uuid', 'villain_uuid', 'date', 'duration_minutes', 'status', 'session_type', 'xp_earned', 'combat_action_reason', 'schedule_rule_uuid', 'planned_workout_uuid', 'scheduled_date'],
   },
   xp_events: {
     appendOnly: true,
@@ -35,12 +35,12 @@ export const REGISTRY = {
   },
   exercises: {
     appendOnly: false,
-    columns: ['uuid', 'name', 'notes', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
-    mutableFields: ['name', 'notes'],
+    columns: ['uuid', 'name', 'notes', 'tracking_type', 'builtin_id', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+    mutableFields: ['name', 'notes', 'tracking_type'],
   },
   set_logs: {
     appendOnly: true,
-    columns: ['uuid', 'session_uuid', 'exercise_uuid', 'set_index', 'reps', 'weight_kg', 'rpe', 'timestamp', 'replaces_uuid', 'profile_uuid'],
+    columns: ['uuid', 'session_uuid', 'exercise_uuid', 'set_index', 'reps', 'weight_kg', 'rpe', 'completed', 'duration_sec', 'distance_m', 'timestamp', 'replaces_uuid', 'profile_uuid'],
   },
   workout_templates: {
     appendOnly: false,
@@ -49,12 +49,27 @@ export const REGISTRY = {
   },
   template_exercises: {
     appendOnly: false,
-    columns: ['uuid', 'template_uuid', 'exercise_uuid', 'position', 'target_sets', 'target_reps', 'notes', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
-    mutableFields: ['template_uuid', 'exercise_uuid', 'position', 'target_sets', 'target_reps', 'notes'],
+    columns: ['uuid', 'template_uuid', 'exercise_uuid', 'position', 'target_sets', 'target_reps', 'target_weight_kg', 'notes', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+    mutableFields: ['template_uuid', 'exercise_uuid', 'position', 'target_sets', 'target_reps', 'target_weight_kg', 'notes'],
   },
   measurements: {
     appendOnly: true,
     columns: ['uuid', 'timestamp', 'kind', 'value', 'unit', 'replaces_uuid', 'profile_uuid'],
+  },
+    foe_catalog: {
+      appendOnly: false,
+      columns: ['uuid', 'name', 'tier', 'max_hp', 'xp_reward', 'encounter_weight', 'enabled', 'builtin_id', 'description', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+      mutableFields: ['name', 'tier', 'max_hp', 'xp_reward', 'encounter_weight', 'enabled', 'description'],
+    },
+  planned_workouts: {
+    appendOnly: false,
+    columns: ['uuid', 'chapter_uuid', 'day_index', 'template_uuid', 'name', 'notes', 'position', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+    mutableFields: ['chapter_uuid', 'day_index', 'template_uuid', 'name', 'notes', 'position'],
+  },
+  schedule_rules: {
+    appendOnly: false,
+    columns: ['uuid', 'name', 'template_uuid', 'planned_workout_uuid', 'start_date', 'recurrence', 'interval_days', 'weekday_mask', 'end_date', 'notes', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+    mutableFields: ['name', 'template_uuid', 'planned_workout_uuid', 'start_date', 'recurrence', 'interval_days', 'weekday_mask', 'end_date', 'notes'],
   },
 };
 
