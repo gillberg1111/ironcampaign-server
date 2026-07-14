@@ -199,10 +199,42 @@ describe('Schedule expansion', () => {
 
   it('expandOccurrences marks done via sessions', () => {
     const rules = [{ uuid: 'r1', name: 'Test', start_date: '2025-06-10', recurrence: 'once', deleted: 0 }];
-    const sessions = [{ schedule_rule_uuid: 'r1', scheduled_date: null }];
+    // Rule-uuid match counts only for the day the session actually happened.
+    const sessions = [{
+      schedule_rule_uuid: 'r1', scheduled_date: null,
+      date: Math.floor(new Date('2025-06-10T12:00:00').getTime() / 1000),
+    }];
     const results = schedule.expandOccurrences(rules, from, to, sessions);
     assert.equal(results.length, 1);
-    assert.ok(results[0].done, 'session with matching schedule_rule_uuid marks done');
+    assert.ok(results[0].done, 'same-rule session on the occurrence day marks done');
+  });
+
+  // local-date key, timezone-safe (occurrence dates are local startOfDay)
+  const dayKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+  it('one session does NOT mark every occurrence of a recurring rule done', () => {
+    // Mon+Wed+Fri weekly rule across June 2025 (bit0 = Monday)
+    const rules = [{ uuid: 'r1', name: 'Push Day', start_date: '2025-06-02', recurrence: 'weekly', weekday_mask: 0b10101, deleted: 0 }];
+    // One completed session, linked to the rule, done on Wed 2025-06-11
+    const sessions = [{
+      schedule_rule_uuid: 'r1', scheduled_date: null,
+      date: Math.floor(new Date('2025-06-11T18:00:00').getTime() / 1000),
+    }];
+    const results = schedule.expandOccurrences(rules, from, to, sessions);
+    assert.ok(results.length > 5, 'recurring rule expands to many occurrences');
+    const doneKeys = results.filter(r => r.done).map(r => dayKey(r.date));
+    assert.deepEqual(doneKeys, ['2025-06-11'], 'exactly the completed day is done');
+  });
+
+  it('a session with an explicit scheduled_date marks only that occurrence', () => {
+    const rules = [{ uuid: 'r1', name: 'Push Day', start_date: '2025-06-02', recurrence: 'weekly', weekday_mask: 0b10101, deleted: 0 }];
+    const sessions = [{
+      schedule_rule_uuid: 'r1', scheduled_date: '2025-06-13',
+      date: Math.floor(new Date('2025-06-14T09:00:00').getTime() / 1000), // logged the next morning
+    }];
+    const results = schedule.expandOccurrences(rules, from, to, sessions);
+    const doneKeys = results.filter(r => r.done).map(r => dayKey(r.date));
+    assert.deepEqual(doneKeys, ['2025-06-13'], 'explicit link wins over the session timestamp');
   });
 
   it('saga workload projection', () => {

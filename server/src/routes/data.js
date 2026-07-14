@@ -44,8 +44,9 @@ export default function dataRoutes(db) {
     let sessions;
     if (month) {
       const [y, m] = month.split('-').map(Number);
-      const start = new Date(y, m - 1, 1).getTime();
-      const end = new Date(y, m, 1).getTime();
+      // Domain timestamps are SECONDS (device convention) — ms bounds match nothing.
+      const start = Math.floor(new Date(y, m - 1, 1).getTime() / 1000);
+      const end = Math.floor(new Date(y, m, 1).getTime() / 1000);
       sessions = db.prepare(
         'SELECT * FROM sessions WHERE profile_uuid = ? AND date >= ? AND date < ? ORDER BY date DESC'
       ).all(puid, start, end);
@@ -73,8 +74,9 @@ export default function dataRoutes(db) {
     if (!month) return res.status(400).json({ error: 'month query param required (yyyy-mm)' });
 
     const [y, m] = month.split('-').map(Number);
-    const start = new Date(y, m - 1, 1).getTime();
-    const end = new Date(y, m, 1).getTime();
+    // Domain timestamps are SECONDS (device convention) — ms bounds match nothing.
+    const start = Math.floor(new Date(y, m - 1, 1).getTime() / 1000);
+    const end = Math.floor(new Date(y, m, 1).getTime() / 1000);
 
     const sessions = db.prepare(
       'SELECT uuid, date, duration_minutes, xp_earned, combat_action_reason, villain_uuid FROM sessions WHERE profile_uuid = ? AND date >= ? AND date < ?'
@@ -96,7 +98,7 @@ export default function dataRoutes(db) {
 
     const dayBuckets = {};
     for (const s of sessions) {
-      const d = new Date(s.date);
+      const d = new Date(s.date * 1000); // seconds → Date
       const day = d.getDate();
       if (!dayBuckets[day]) dayBuckets[day] = { day, sessions: 0, xp: 0, damage: 0, sets: 0 };
       dayBuckets[day].sessions += 1;
@@ -866,7 +868,7 @@ export default function dataRoutes(db) {
   // ── Version ──
 
   router.get('/data/version', (_req, res) => {
-    res.json({ version: '2.66.2' });
+    res.json({ version: '2.67.0' });
   });
 
   return router;

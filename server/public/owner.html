@@ -5,185 +5,218 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IronCampaign</title>
 <style>
-/* ── IronCampaign Field Manual — v2.52 ── */
+/* ── IronCampaign Field Manual, daylight edition — v2.67 ──
+   Warm paper ground, crisp white sheets, oxblood kept as the single brand accent.
+   Every selector and CSS-variable NAME from v2.52 is preserved (JS emits inline
+   styles referencing --oxblood-text/--text-dim/--gray/--green/--red). */
 :root {
-  --oxblood:#73121f; --oxblood-light:#a02030; --oxblood-engrave:#5a0e1a;
-  --oxblood-text:#d17b82; /* brand red as TEXT — 6.1:1 on cards (deep oxblood is <2.6:1, fails). Fills/borders keep --oxblood/-light */
-  --ink:#141414; --gray:#6b6b6b; --line:#2a2a2a; --line-engraved:#1e1e1e;
-  --bg:#0a0a0a; --card:#121212; --card-elevated:#181818; --card-muted:#0e0e0e;
-  --text:#e2ded8; --text-dim:#8a8782; --green:#2d7d46; --red:#bc4742;
+  --oxblood:#73121f; --oxblood-light:#8e1b2a; --oxblood-engrave:#5a0e1a;
+  --oxblood-text:#73121f; /* deep oxblood as TEXT passes on paper (~10:1); the light theme inverts v2.52's constraint */
+  --oxblood-tint:rgba(115,18,31,.06);
+  --ink:#211d19; --gray:#6d675f; --line:#e8e3da; --line-engraved:#ddd7cc;
+  --bg:#f6f4ef; --card:#fffefb; --card-elevated:#faf8f3; --card-muted:#f0ede6;
+  --text:#2a2620; --text-dim:#6d675f; --green:#25693c; --red:#a5332d;
   --serif:'Iowan Old Style','Palatino Nova',Palatino,Georgia,serif;
   --mono:'SF Mono','Cascadia Code',Consolas,monospace;
   --sans:-apple-system,'Segoe UI',Roboto,sans-serif;
-  --radius:4px; --grid:4px;
+  --radius:10px; --radius-sm:8px; --grid:4px;
+  --shadow-card:0 1px 2px rgba(33,29,25,.05), 0 4px 16px rgba(33,29,25,.04);
+  --shadow-pop:0 4px 12px rgba(33,29,25,.10), 0 16px 48px rgba(33,29,25,.14);
 }
 *,::before,::after { box-sizing:border-box; margin:0; padding:0; }
 
 body {
-  font:15px/1.55 var(--sans);
+  font:15px/1.6 var(--sans);
   color:var(--text); background:var(--bg);
   min-height:100vh;
+  /* faint laid-paper grain — barely-there horizontal fibre */
   background-image:
-    repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.008) 2px,rgba(255,255,255,.008) 3px);
-  background-size:100% 3px;
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(33,29,25,.012) 3px,rgba(33,29,25,.012) 4px);
+  -webkit-font-smoothing:antialiased;
 }
 
-h1,h2,h3 {
-  font-family:var(--serif); font-weight:800;
-  letter-spacing:.06em; text-transform:uppercase;
+h1,h2,h3 { font-family:var(--serif); }
+h2 {
+  font-size:26px; font-weight:700; letter-spacing:-.01em;
+  color:var(--ink); margin-bottom:16px;
 }
-h2 { font-size:20px; margin-bottom:16px; color:var(--text); }
 h3 {
-  font-size:13px; color:var(--text-dim); margin-bottom:12px; letter-spacing:.1em;
-  border-bottom:1px solid var(--line); padding-bottom:6px;
+  font-size:11.5px; font-weight:700; color:var(--text-dim); margin-bottom:12px;
+  letter-spacing:.14em; text-transform:uppercase;
+  border-bottom:1px solid var(--line); padding-bottom:7px;
 }
 input,select,button { font:inherit; }
 input,select {
-  padding:8px 12px; border-radius:var(--radius); border:1px solid var(--line);
+  padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--line-engraved);
   background:var(--card); color:var(--text);
+  transition:border-color .15s, box-shadow .15s;
 }
+input::placeholder { color:#9b948a; }
 input:focus-visible,select:focus-visible {
-  outline:none; border-color:var(--oxblood-light);
-  box-shadow:0 0 0 2px rgba(160,32,48,.25);
+  outline:none; border-color:var(--oxblood);
+  box-shadow:0 0 0 3px var(--oxblood-tint);
 }
 button {
-  padding:8px 20px; border-radius:var(--radius); border:none; cursor:pointer;
-  background:var(--oxblood); color:#fff; font-weight:600; font-size:13px;
-  letter-spacing:.03em; text-transform:uppercase;
-  transition:background .15s, transform .1s;
+  padding:9px 18px; border-radius:var(--radius-sm); border:none; cursor:pointer;
+  background:var(--oxblood); color:#fff; font-weight:600; font-size:13.5px;
+  letter-spacing:.01em;
+  box-shadow:0 1px 2px rgba(90,14,26,.25);
+  transition:background .15s, transform .1s, box-shadow .15s;
 }
-button:active { transform:scale(.97); }
+button:active { transform:scale(.98); }
 button:hover { background:var(--oxblood-light); }
-button:focus-visible { outline:2px solid var(--oxblood-light); outline-offset:2px; }
-button:disabled { opacity:.35; cursor:default; transform:none; }
+button:focus-visible { outline:2px solid var(--oxblood); outline-offset:2px; }
+button:disabled { opacity:.4; cursor:default; transform:none; }
 button:disabled:hover { background:var(--oxblood); }
 button.secondary {
-  background:transparent; color:var(--text); border:1px solid var(--line);
+  background:var(--card); color:var(--text); border:1px solid var(--line-engraved);
+  box-shadow:none;
 }
-button.secondary:hover { background:var(--card-elevated); }
-button.danger { background:var(--red); }
-button.danger:hover { background:#d4534a; }
-button.small { padding:4px 12px; font-size:11px; letter-spacing:.04em; }
+button.secondary:hover { background:var(--card-muted); border-color:#cfc8bb; }
+/* destructive actions are quiet ghosts — red ink, not red slabs */
+button.danger {
+  background:var(--card); color:var(--red);
+  border:1px solid rgba(165,51,45,.35); box-shadow:none;
+}
+button.danger:hover { background:rgba(165,51,45,.07); border-color:var(--red); }
+button.small { padding:5px 12px; font-size:12px; border-radius:7px; }
 .msg { color:var(--text-dim); font-size:13px; font-family:var(--sans); }
 .error { color:var(--red); font-size:13px; }
+/* Sync Now is a utility, not a call to action — quiet secondary treatment */
+#syncNowBtn {
+  background:var(--card); color:var(--text); border:1px solid var(--line-engraved);
+  box-shadow:none;
+}
+#syncNowBtn:hover { background:var(--card-muted); border-color:#cfc8bb; }
 
-/* ── Cards (FieldManualCard) ── */
+/* ── Cards: paper sheets on the warm ground ── */
 .card {
-  background:var(--card); border:1px solid var(--line-engraved); border-radius:var(--radius);
-  padding:16px; margin-bottom:12px; position:relative;
+  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:20px; margin-bottom:14px; position:relative;
+  box-shadow:var(--shadow-card);
 }
-.card::after {
-  content:''; position:absolute; top:0; left:0; right:0; height:1px;
-  background:rgba(255,255,255,.04);
-}
-/* corner tick on cards */
+.card::after { content:none; }
+/* corner tick — a faint oxblood draft-mark, the field-manual signature */
 .card::before {
-  content:'\25E4'; position:absolute; top:4px; right:6px;
-  font-size:8px; color:rgba(255,255,255,.06); pointer-events:none;
+  content:'\25E4'; position:absolute; top:6px; right:8px;
+  font-size:8px; color:rgba(115,18,31,.18); pointer-events:none;
 }
 
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
 .row.sb { justify-content:space-between; }
 
-table { width:100%; border-collapse:collapse; font-size:13px; }
-th,td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); }
+table { width:100%; border-collapse:collapse; font-size:13.5px; }
+th,td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); }
 th {
-  font-family:var(--serif); color:var(--text-dim); font-weight:700;
-  text-transform:uppercase; font-size:11px; letter-spacing:.08em;
-  border-bottom-width:2px;
+  font-family:var(--sans); color:var(--text-dim); font-weight:600;
+  text-transform:uppercase; font-size:11px; letter-spacing:.09em;
+  border-bottom-width:2px; border-bottom-color:var(--line-engraved);
 }
-code { background:var(--card); padding:1px 5px; border-radius:var(--radius); font-size:13px; }
+code { background:var(--card-muted); padding:2px 6px; border-radius:6px; font-size:13px; font-family:var(--mono); }
 
-/* ── Tabs ── */
+/* ── Tabs: sticky paper bar, oxblood underline on the active tab ── */
 nav.tabs {
-  display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid var(--line);
+  display:flex; gap:2px; margin:0 -4px 22px; padding:6px 4px 0;
+  border-bottom:1px solid var(--line-engraved);
   overflow-x:auto; -webkit-overflow-scrolling:touch;
+  position:sticky; top:0; z-index:50;
+  align-items:center;
+  background:var(--bg)
+    repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(33,29,25,.012) 3px,rgba(33,29,25,.012) 4px);
 }
+/* wordmark anchors the sticky bar — decorative (empty alt), hidden on small screens */
+nav.tabs::before {
+  content:'IRONCAMPAIGN' / '';
+  font-family:var(--serif); font-weight:900; font-size:12.5px;
+  letter-spacing:.18em; color:var(--oxblood-text);
+  padding:0 18px 2px 10px; white-space:nowrap;
+}
+@media (max-width:680px) { nav.tabs::before { content:none; } }
 nav.tabs button {
-  background:none; color:var(--text-dim); border:none; border-radius:0;
-  padding:10px 16px; font-family:var(--serif); font-weight:700;
-  font-size:12px; letter-spacing:.06em; text-transform:uppercase;
-  border-bottom:2px solid transparent; margin-bottom:-2px;
-  white-space:nowrap; transition:color .15s, border-color .15s;
+  background:none; color:var(--text-dim); border:none; border-radius:7px 7px 0 0;
+  padding:10px 14px; font-family:var(--sans); font-weight:600;
+  font-size:13px; letter-spacing:.02em; text-transform:none;
+  border-bottom:2px solid transparent; margin-bottom:-1px;
+  white-space:nowrap; box-shadow:none;
+  transition:color .15s, border-color .15s, background .15s;
 }
-nav.tabs button:hover { color:var(--text); }
-nav.tabs button.active { color:var(--text); border-bottom-color:var(--oxblood-light); }
+nav.tabs button:hover { color:var(--ink); background:var(--oxblood-tint); }
+nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood); }
 
 /* ── Layout ── */
-#app { max-width:800px; margin:0 auto; padding:16px; }
+#app { max-width:840px; margin:0 auto; padding:20px 24px 48px; }
 .view { display:none; }
 .view.active { display:block; }
 
-/* ── Auth screens (login/claim) ── */
-.auth-screen { max-width:420px; margin:80px auto 0; }
+/* ── Auth screens: letterpress cover page ── */
+.auth-screen { max-width:400px; margin:96px auto 0; }
 .auth-screen h2 {
-  text-align:center; margin-bottom:24px; font-size:32px; font-weight:900;
-  letter-spacing:.12em; color:var(--oxblood-text);
-  text-shadow:0 1px 0 rgba(0,0,0,.5);
+  text-align:center; margin-bottom:28px; font-size:30px; font-weight:900;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood-text);
 }
 .auth-screen h2::after {
-  content:''; display:block; width:48px; height:2px; background:var(--oxblood);
-  margin:12px auto 0;
+  content:''; display:block; width:44px; height:3px; background:var(--oxblood);
+  margin:14px auto 0; border-radius:2px;
 }
+.auth-screen .card { padding:24px; }
 .auth-error { color:var(--red); font-size:13px; margin-top:6px; min-height:18px; }
 
-/* ── HP bar with damage-tick texture ── */
+/* ── HP bar: rounded track, damage-tick texture kept ── */
 .hpbar {
-  height:12px; border-radius:2px; background:var(--card); margin:6px 0 10px; overflow:hidden;
-  border:1px solid var(--line-engraved);
+  height:10px; border-radius:999px; background:var(--card-muted); margin:8px 0 10px; overflow:hidden;
+  border:1px solid var(--line);
 }
 .hpbar div {
-  height:100%; border-radius:2px; transition:width .4s;
+  height:100%; border-radius:999px; transition:width .4s;
   background-image:
-    repeating-linear-gradient(90deg,transparent,transparent 1px,rgba(0,0,0,.2) 1px,rgba(0,0,0,.2) 2px);
+    repeating-linear-gradient(90deg,transparent,transparent 1px,rgba(0,0,0,.16) 1px,rgba(0,0,0,.16) 2px);
   background-size:12px 100%;
 }
 .hpbar.warn div { background-color:var(--red); }
 .hpbar.ok div { background-color:var(--oxblood); }
 .hpbar.full div { background-color:var(--green); }
-.hp-label { font-size:11px; color:var(--text-dim); font-family:var(--mono);
+.hp-label { font-size:12px; color:var(--text-dim); font-family:var(--mono);
   font-variant-numeric:tabular-nums; }
 
-/* ── Stamps ── */
+/* ── Stamps: red ink on paper ── */
 .defeated-stamp, .stamp {
   display:inline-block; border:2px solid var(--oxblood); color:var(--oxblood-text);
-  padding:3px 10px; border-radius:2px; font-size:11px; font-weight:900;
+  padding:3px 10px; border-radius:3px; font-size:11px; font-weight:900;
   font-family:var(--serif); letter-spacing:.12em; text-transform:uppercase;
-  transform:rotate(-6deg); opacity:.85;
-  text-shadow:0 1px 0 rgba(0,0,0,.5), 0 0 6px rgba(115,18,31,.3);
+  transform:rotate(-6deg); opacity:.9;
+  background:rgba(115,18,31,.04);
 }
 
 /* ── Calendar grid ── */
-.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
 .cal-grid .day-head {
-  text-align:center; font-family:var(--serif); font-size:11px; color:var(--text-dim); 
-  padding:6px 0; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  text-align:center; font-family:var(--sans); font-size:11px; color:var(--text-dim);
+  padding:6px 0; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
 }
 .cal-grid .day {
-  aspect-ratio:1; display:flex; align-items:center; justify-content:center;
-  border-radius:2px; font-size:13px; cursor:pointer; position:relative;
+  height:46px; display:flex; align-items:center; justify-content:center;
+  border-radius:var(--radius-sm); font-size:13.5px; cursor:pointer; position:relative;
   background:var(--card); font-family:var(--mono); font-variant-numeric:tabular-nums;
-  border:1px solid var(--line-engraved);
+  border:1px solid var(--line);
+  transition:background .15s, border-color .15s;
 }
 .cal-grid .day.has { background:var(--oxblood); color:#fff; font-weight:700; border-color:var(--oxblood); }
 .cal-grid .day.done { background:var(--green); color:#fff; border-color:var(--green); }
 .cal-grid .day.done::after {
-  content:''; position:absolute; bottom:3px; width:4px; height:4px; border-radius:50%; background:#fff;
+  content:''; position:absolute; bottom:4px; width:4px; height:4px; border-radius:50%; background:#fff;
 }
 
 /* ── Modal overlay ── */
 .overlay {
-  position:fixed; inset:0; background:rgba(0,0,0,.8); display:flex;
+  position:fixed; inset:0; background:rgba(33,29,25,.42); display:flex;
   align-items:center; justify-content:center; z-index:100;
 }
 .overlay .panel {
-  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--card); border:1px solid var(--line); border-radius:14px;
   padding:24px; max-width:400px; width:90%; max-height:85vh; overflow-y:auto;
-  position:relative;
+  position:relative; box-shadow:var(--shadow-pop);
 }
-.overlay .panel::before {
-  content:''; position:absolute; top:0;left:0;right:0;height:1px;background:rgba(255,255,255,.06);
-}
+.overlay .panel::before { content:none; }
 .overlay .panel h3 { margin-bottom:16px; }
 
 /* ── Chronicle feed ── */
@@ -193,47 +226,51 @@ nav.tabs button.active { color:var(--text); border-bottom-color:var(--oxblood-li
 /* ── Day detail panel ── */
 .day-detail {
   background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-  padding:16px; margin-top:8px; position:relative;
+  padding:20px; margin-top:10px; position:relative;
+  box-shadow:var(--shadow-card);
 }
-.day-detail::after {
-  content:''; position:absolute; top:0;left:0;right:0;height:1px;background:rgba(255,255,255,.04);
-}
+.day-detail::after { content:none; }
 .day-detail h3 { margin-bottom:12px; }
 .day-detail .section { margin-bottom:12px; }
 .day-detail .section h4 {
   font-size:11px; color:var(--text-dim); text-transform:uppercase;
-  font-family:var(--serif); letter-spacing:.08em; margin-bottom:6px;
+  font-family:var(--sans); font-weight:600; letter-spacing:.09em; margin-bottom:6px;
   padding-bottom:4px; border-bottom:1px solid var(--line);
 }
-.day-detail .item { padding:6px 0; font-size:13px; border-bottom:1px solid var(--line); }
+.day-detail .item { padding:6px 0; font-size:13.5px; border-bottom:1px solid var(--line); }
 .day-detail .item:last-child { border-bottom:none; }
 .cal-grid .day { cursor:pointer; }
-.cal-grid .day:hover { filter:brightness(1.3); }
-.cal-grid .day.selected { outline:2px solid var(--oxblood-light); outline-offset:-2px; }
+.cal-grid .day:hover { background:var(--oxblood-tint); border-color:var(--oxblood-light); }
+.cal-grid .day.has:hover { background:var(--oxblood-light); }
+.cal-grid .day.done:hover { background:var(--green); }
+.cal-grid .day.selected { outline:2px solid var(--oxblood); outline-offset:-2px; }
 
 /* ── Card descriptions ── */
-.card-desc { font-size:12px; color:var(--text-dim); font-style:italic; margin-top:4px; line-height:1.45; }
+.card-desc { font-size:13px; color:var(--text-dim); font-style:italic; margin-top:4px; line-height:1.5;
+  font-family:var(--serif); }
 
 /* ── Empty states ── */
 .msg:only-child { font-style:italic; color:var(--text-dim); padding:20px 0; text-align:center; }
 
-/* ── Toast message ── */
+/* ── Toast: ink chip ── */
 .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
-  background:var(--card-elevated); color:var(--text); padding:10px 24px; border-radius:var(--radius);
+  background:var(--ink); color:#f6f4ef; padding:10px 22px; border-radius:999px;
   font-size:13px; z-index:200; opacity:0; transition:opacity .2s; pointer-events:none;
-  border:1px solid var(--line); }
+  border:none; box-shadow:var(--shadow-pop); }
 .toast.show { opacity:1; }
 
 /* ── Responsive: ≤ 375px ── */
 @media (max-width:420px) {
-  #app { padding:8px; }
-  h2 { font-size:17px; }
-  nav.tabs button { padding:8px 10px; font-size:10px; letter-spacing:.04em; }
-  .card { padding:12px; }
-  .auth-screen { margin:40px auto 0; }
+  #app { padding:10px 12px 32px; }
+  h2 { font-size:21px; }
+  nav.tabs { margin:0 -2px 16px; }
+  nav.tabs button { padding:9px 10px; font-size:12px; }
+  .card { padding:14px; }
+  .auth-screen { margin:48px auto 0; }
   .auth-screen h2 { font-size:24px; }
   .overlay .panel { padding:16px; }
-  .cal-grid .day { font-size:11px; }
+  .cal-grid { gap:4px; }
+  .cal-grid .day { font-size:11.5px; border-radius:6px; height:40px; }
   table { font-size:12px; }
   th,td { padding:6px 4px; }
 }

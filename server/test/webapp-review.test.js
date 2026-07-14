@@ -77,6 +77,35 @@ describe('Web app Phase 1 — review fixes', () => {
     assert.equal(sessions.c, 0, 'no session row written');
   }));
 
+  it('/data/history and month-filtered /data/sessions see seconds-dated rows', withServer(async (base, db) => {
+    const token = addDevice(db, 'hist');
+    await fetch(`${base}/api/v1/data/overview`, { headers: { Authorization: authHeader(token).Authorization } }); // provision
+    const heavy = db.prepare(
+      "SELECT uuid FROM villains WHERE profile_uuid = 'hist' AND slot = 'constant_heavy' AND active = 1"
+    ).get();
+    const s = await postJson(`${base}/api/v1/data/sessions`,
+      { villainUUID: heavy.uuid, durationMinutes: 45, sessionType: 'fullScheduled' }, authHeader(token));
+    assert.equal(s.status, 201);
+    await postJson(`${base}/api/v1/data/water`, {}, authHeader(token));
+
+    // The month the session was just logged in (server-local, matching the endpoint's math)
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const hist = await fetch(`${base}/api/v1/data/history?month=${ym}`, { headers: { Authorization: authHeader(token).Authorization } });
+    const h = await hist.json();
+    // Regression: bounds were MILLISECONDS against seconds-valued date columns, so every
+    // month returned zeros and the web History tab was permanently empty.
+    assert.equal(h.totalSessions, 1, 'history sees the session just logged');
+    assert.equal(h.measurementCount, 1, 'history sees the water measurement');
+    assert.equal(h.dayBuckets.length, 1);
+    assert.equal(h.dayBuckets[0].day, now.getDate(), 'session bucketed on the right day');
+
+    const sess = await fetch(`${base}/api/v1/data/sessions?month=${ym}`, { headers: { Authorization: authHeader(token).Authorization } });
+    const sj = await sess.json();
+    assert.equal(sj.sessions.length, 1, 'month-filtered sessions list sees it too');
+  }));
+
   it('encounter is idempotent: a live featured foe keeps the slot', withServer(async (base, db) => {
     const token = addDevice(db, 'enc');
     const first = await postJson(`${base}/api/v1/data/encounter`, {}, authHeader(token));

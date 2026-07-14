@@ -77,8 +77,14 @@ export function expandOccurrences(rules, from, to, sessions) {
     const occurrences = expandRule(rule, from, to);
     for (const { date, key } of occurrences) {
       const done = sessions.some(s => {
-        if (s.schedule_rule_uuid && s.schedule_rule_uuid === rule.uuid) return true;
-        if (s.scheduled_date && s.scheduled_date === key) return true;
+        // Explicit occurrence link wins: a session completed FOR a calendar day marks that day.
+        if (s.scheduled_date) return s.scheduled_date === key;
+        // Same rule but no explicit link: count it only for the day the session actually
+        // happened. A bare rule-uuid match would mark EVERY occurrence of a recurring rule
+        // done after a single session (one Push Day completes all future Push Days).
+        if (s.schedule_rule_uuid && s.schedule_rule_uuid === rule.uuid) {
+          return stringFromDate(new Date(s.date * 1000)) === key; // s.date is SECONDS
+        }
         return false;
       });
       results.push({
