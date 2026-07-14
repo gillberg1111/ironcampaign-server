@@ -17,9 +17,13 @@ describe('Owner console page', () => {
       const res = await fetch(`${base}/owner`);
       assert.equal(res.status, 200);
       const html = await res.text();
-      assert.match(html, /Owner Console/);
+      assert.match(html, /IronCampaign/);
       assert.match(html, /['"]\/api\/v1['"]/);
       assert.match(html, /login/);
+      // Console is merged into Settings; pairing + device elements must exist
+      assert.match(html, /id="phraseBox"/);
+      assert.match(html, /id="devices"/);
+      assert.match(html, /id="pairMsg"/);
     } finally { srv.close(); }
   });
 
@@ -64,11 +68,12 @@ describe('Owner console page', () => {
     assert.match(html, /<script src="qr\.js"/);
   });
 
-  it('owner.html has all seven tab views (Console, Today, Calendar, Sagas, History, Roster, Settings)', () => {
+  it('owner.html has all six tab views (Today, Calendar, Sagas, History, Roster, Settings)', () => {
     const html = fs.readFileSync(htmlPath, 'utf8');
-    for (const tab of ['console', 'today', 'calendar', 'sagas', 'history', 'roster', 'settings']) {
+    for (const tab of ['today', 'calendar', 'sagas', 'history', 'roster', 'settings']) {
       assert.match(html, new RegExp('id="view-' + tab + '"'), 'missing tab view: ' + tab);
     }
+    assert.ok(!html.includes('data-tab="console"'), 'console tab must be removed');
   });
 
   it('owner.html has no TTRPG jargon in copy', () => {

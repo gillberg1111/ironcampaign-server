@@ -61,14 +61,9 @@ export function applyConsoleChanges(db, profileUuid, changes) {
 }
 
 export function seedFoeCatalogIfNeeded(db, profileUuid) {
-  const existing = db.prepare(
-    'SELECT COUNT(*) as cnt FROM foe_catalog WHERE profile_uuid = ? AND builtin_id IS NOT NULL'
-  ).get(profileUuid);
-  if (existing.cnt > 0) return { seeded: 0 };
-
   const catalogPath = path.join(__dirname, '..', 'data', 'foe-catalog.json');
   const data = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
-  if (!Array.isArray(data) || data.length === 0) return { seeded: 0 };
+  if (!Array.isArray(data) || data.length === 0) return { seeded: 0, refreshed: 0 };
 
   const namespace = profileUuid;
   const seenBuiltinIDs = new Set(
@@ -79,6 +74,7 @@ export function seedFoeCatalogIfNeeded(db, profileUuid) {
 
   const now = Date.now();
   const changes = [];
+  let newEntryCount = 0;
 
   for (const entry of data) {
     if (seenBuiltinIDs.has(entry.builtin_id)) continue;
@@ -100,9 +96,33 @@ export function seedFoeCatalogIfNeeded(db, profileUuid) {
       { table: 'foe_catalog', uuid, field: 'builtin_id', value: entry.builtin_id, hlc, deviceId: CONSOLE_DEVICE_ID },
       { table: 'foe_catalog', uuid, field: 'description', value: entry.description ?? null, hlc, deviceId: CONSOLE_DEVICE_ID },
     );
+    newEntryCount++;
   }
 
-  if (changes.length === 0) return { seeded: 0 };
+  // Phase 2: description refresh for existing builtins whose descriptions differ from catalog
+  const catalogByBuiltin = {};
+  for (const entry of data) {
+    catalogByBuiltin[entry.builtin_id] = entry.description ?? null;
+  }
+
+  let descRefreshed = 0;
+  if (seenBuiltinIDs.size > 0) {
+    const existingRows = db.prepare(
+      'SELECT uuid, builtin_id, description FROM foe_catalog WHERE profile_uuid = ? AND builtin_id IS NOT NULL AND deleted = 0'
+    ).all(profileUuid);
+    for (const row of existingRows) {
+      const catDesc = catalogByBuiltin[row.builtin_id];
+      if (catDesc === undefined || catDesc === null) continue;
+      if (row.description === catDesc) continue;
+      const hlc = tickConsoleClock(db, now);
+      changes.push(
+        { table: 'foe_catalog', uuid: row.uuid, field: 'description', value: catDesc, hlc, deviceId: CONSOLE_DEVICE_ID },
+      );
+      descRefreshed++;
+    }
+  }
+
+  if (changes.length === 0) return { seeded: 0, refreshed: 0 };
 
   const store = new SqliteStorageAdapter(db, profileUuid);
   const insertLog = db.prepare(
@@ -112,14 +132,12 @@ export function seedFoeCatalogIfNeeded(db, profileUuid) {
 
   const apply = db.transaction(() => {
     const results = applyBatch(store, changes);
-    let applied = 0;
     for (const { change, decision } of results) {
       if (decision === 'applied' || decision === 'appended' || decision === 'undeleted') {
         insertLog.run(
           profileUuid, change.table, change.uuid, change.field,
           JSON.stringify(change.value), change.hlc, change.deviceId, null, now
         );
-        applied++;
       }
     }
 
@@ -149,12 +167,10 @@ export function seedFoeCatalogIfNeeded(db, profileUuid) {
         }
       }
     }
-
-    return applied / 8;
   });
 
-  const count = apply();
-  return { seeded: count };
+  apply();
+  return { seeded: newEntryCount, refreshed: descRefreshed };
 }
 
 export function seedExerciseLibraryIfNeeded(db, profileUuid) {

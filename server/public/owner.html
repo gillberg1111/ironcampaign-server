@@ -249,6 +249,14 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
 .card-desc { font-size:13px; color:var(--text-dim); font-style:italic; margin-top:4px; line-height:1.5;
   font-family:var(--serif); }
 
+/* ── Foe art thumbnails ── */
+.foe-art {
+  width:56px; height:56px; object-fit:cover;
+  border-radius:var(--radius-sm); border:1px solid var(--line);
+  flex-shrink:0;
+}
+@media (max-width:420px) { .foe-art { width:48px; height:48px; } }
+
 /* ── Empty states ── */
 .msg:only-child { font-style:italic; color:var(--text-dim); padding:20px 0; text-align:center; }
 
@@ -319,8 +327,7 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
   </div>
 
   <nav class="tabs" id="mainTabs" style="display:none">
-    <button data-tab="console" class="active">Console</button>
-    <button data-tab="today">Today</button>
+    <button data-tab="today" class="active">Today</button>
     <button data-tab="calendar">Calendar</button>
     <button data-tab="sagas">Sagas</button>
     <button data-tab="history">History</button>
@@ -330,34 +337,6 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
   <div class="row" style="margin-bottom:12px;justify-content:flex-end;align-items:center" id="syncRow" style="display:none">
     <span id="syncTime" class="msg" style="margin-right:12px"></span>
     <button id="syncNowBtn" onclick="doSync()">Sync Now</button>
-  </div>
-
-  <!-- CONSOLE TAB (logged in) -->
-  <div id="view-console" class="view active">
-    <h2>Owner Console</h2>
-    <p class="msg">Device pairing &amp; management</p>
-    <div class="card">
-      <div class="row">
-        <button onclick="createPairing()">Generate iOS Pairing Phrase</button>
-        <span class="msg" id="pairMsg"></span>
-      </div>
-      <div id="phraseBox" style="display:none">
-        <p style="font-size:18px;font-weight:700;letter-spacing:.02em" id="phrase"></p>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px" id="qrBox"></div>
-        <p class="msg">Enter this on the device — expires: <span id="expiry"></span></p>
-      </div>
-    </div>
-    <div class="card">
-      <div class="row sb"><strong>Devices</strong><button class="small secondary" onclick="loadDevices()">Refresh</button></div>
-      <table><thead><tr><th>Name</th><th>Created</th><th>Last seen</th><th></th></tr></thead>
-        <tbody id="devices"></tbody></table>
-    </div>
-    <div class="card">
-      <div class="row sb">
-        <span>Logout</span>
-        <button class="small secondary" onclick="doLogout()">Logout</button>
-      </div>
-    </div>
   </div>
 
   <!-- TODAY TAB -->
@@ -416,6 +395,33 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
   <!-- SETTINGS TAB -->
   <div id="view-settings" class="view">
     <h2>Settings</h2>
+
+    <div class="card">
+      <h3>Device Pairing</h3>
+      <div class="row">
+        <button onclick="createPairing()">Generate iOS Pairing Phrase</button>
+        <span class="msg" id="pairMsg"></span>
+      </div>
+      <div id="phraseBox" style="display:none">
+        <p style="font-size:18px;font-weight:700;letter-spacing:.02em" id="phrase"></p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px" id="qrBox"></div>
+        <p class="msg">Enter this on the device — expires: <span id="expiry"></span></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Devices</h3>
+      <div class="row sb"><span class="msg">Connected devices</span><button class="small secondary" onclick="loadDevices()">Refresh</button></div>
+      <table><thead><tr><th>Name</th><th>Created</th><th>Last seen</th><th></th></tr></thead>
+        <tbody id="devices"></tbody></table>
+    </div>
+
+    <div class="card">
+      <div class="row sb">
+        <span>Logout</span>
+        <button class="small secondary" onclick="doLogout()">Logout</button>
+      </div>
+    </div>
 
     <div class="card">
       <h3>Preferences</h3>
@@ -490,8 +496,6 @@ function showClaimView() {
   document.getElementById('view-login').style.display = 'none';
   document.getElementById('mainTabs').style.display = 'none';
   document.getElementById('syncRow').style.display = 'none';
-  document.getElementById('view-console').classList.remove('active');
-  document.getElementById('view-console').style.display = 'none';
 }
 
 function showLoginView() {
@@ -499,17 +503,14 @@ function showLoginView() {
   document.getElementById('view-login').style.display = 'block';
   document.getElementById('mainTabs').style.display = 'none';
   document.getElementById('syncRow').style.display = 'none';
-  document.getElementById('view-console').classList.remove('active');
-  document.getElementById('view-console').style.display = 'none';
 }
 
 function showMainView() {
   document.getElementById('view-claim').style.display = 'none';
   document.getElementById('view-login').style.display = 'none';
-  document.getElementById('view-console').style.display = '';
   document.getElementById('mainTabs').style.display = 'flex';
   document.getElementById('syncRow').style.display = 'flex';
-  switchTab('console');
+  switchTab('today');
   loadVocab().then(applyVocab);
 }
 
@@ -582,14 +583,13 @@ document.querySelectorAll('nav.tabs button').forEach(b => {
 function switchTab(name) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
-  if (!token && name !== 'console') { toast('Login first — enter your credentials to continue'); return; }
-  if (name === 'console' && token) loadDevices();
-  else if (name === 'today') loadToday();
+  if (!token) { toast('Login first — enter your credentials to continue'); return; }
+  if (name === 'today') loadToday();
   else if (name === 'calendar') loadCalendar();
   else if (name === 'sagas') loadSagas();
   else if (name === 'history') loadHistory();
   else if (name === 'roster') loadRoster();
-  else if (name === 'settings') loadSettings();
+  else if (name === 'settings') { loadDevices(); loadSettings(); }
 }
 
 async function doSync() {
@@ -599,13 +599,12 @@ async function doSync() {
   try {
     const act = document.querySelector('nav.tabs button.active');
     const name = act ? act.dataset.tab : null;
-    if (name === 'console' && token) await loadDevices();
-    else if (name === 'today') await loadToday();
+    if (name === 'today') await loadToday();
     else if (name === 'calendar') await loadCalendar();
     else if (name === 'sagas') await loadSagas();
     else if (name === 'history') await loadHistory();
     else if (name === 'roster') await loadRoster();
-    else if (name === 'settings') await loadSettings();
+    else if (name === 'settings') { await loadDevices(); await loadSettings(); }
     btn.textContent = 'Synced ✓';
     document.getElementById('syncTime').textContent = 'Last fetched: ' + new Date().toLocaleTimeString();
     setTimeout(() => { btn.textContent = 'Sync Now'; }, 2000);
@@ -852,7 +851,17 @@ function isDead(v) { return v.hp <= 0; }
 
 function renderVillainCard(v, isFeatured, isMinion) {
   const dead = isDead(v);
-  let h = '<div class="card">';
+  let builtinId = null;
+  if (v.catalog_uuid) {
+    const cat = todayCatalog.find(c => c.uuid === v.catalog_uuid);
+    if (cat && cat.builtin_id) builtinId = cat.builtin_id;
+  }
+  if (!builtinId && v.slot === 'constant_heavy') builtinId = 'rust';
+  if (!builtinId && v.slot === 'constant_minion') builtinId = 'drought';
+
+  let h = '<div class="card"><div style="display:flex;gap:14px;align-items:flex-start">';
+  if (builtinId) h += '<img class="foe-art" src="/images/foes/' + e(builtinId) + '.jpg" loading="lazy" alt="">';
+  h += '<div style="flex:1;min-width:0">';
   h += '<div class="row sb"><strong>' + e(v.name) + '</strong>';
   if (v.tier) h += '<span style="font-size:12px;color:var(--oxblood-text);text-transform:uppercase">' + e(tierLabel(v.tier)) + '</span>';
   h += '</div>';
@@ -885,7 +894,7 @@ function renderVillainCard(v, isFeatured, isMinion) {
     h += '</div>';
   }
   if (!dead) h += '<button class="small danger" style="margin-top:4px" onclick="doArchive(' + jsArg(v.uuid) + ')">Archive</button>';
-  h += '</div>';
+  h += '</div></div></div>'; // close: inner column, flex wrapper, card — one per open, or every next card nests inside this one
   return h;
 }
 
@@ -1454,7 +1463,10 @@ async function loadRoster() {
       if (!entries.length) continue;
       html += '<h3>' + label + '</h3>';
       for (const entry of entries) {
-        html += '<div class="card"><div class="row sb">';
+        html += '<div class="card"><div style="display:flex;gap:14px;align-items:flex-start">';
+        if (entry.builtin_id) html += '<img class="foe-art" src="/images/foes/' + e(entry.builtin_id) + '.jpg" loading="lazy" alt="">';
+        html += '<div style="flex:1;min-width:0">';
+        html += '<div class="row sb">';
         html += '<div><strong>' + e(entry.name) + '</strong>';
         if (entry.builtin_id) html += ' <span style="font-size:11px;color:var(--text-dim)">(built-in)</span>';
         html += '</div>';
@@ -1468,7 +1480,7 @@ async function loadRoster() {
         html += '<button class="small ' + (entry.enabled ? 'secondary' : '') + '" onclick="doToggleFoe(' + jsArg(entry.uuid) + ',' + !!(!entry.enabled) + ')">' + (entry.enabled ? 'Disable' : 'Enable') + '</button>';
         if (!entry.builtin_id) html += '<button class="small secondary" onclick="showEditFoe(' + jsArg(entry.uuid) + ',' + jsArg(entry.name) + ',' + Number(entry.max_hp) + ',' + Number(entry.xp_reward) + ',' + Number(entry.encounter_weight) + ',' + jsArg(entry.tier) + ')">Edit</button>';
         if (!entry.builtin_id) html += '<button class="small danger" onclick="doDeleteFoe(' + jsArg(entry.uuid) + ',' + jsArg(entry.name) + ')">Delete</button>';
-        html += '</div></div>';
+        html += '</div></div></div></div>'; // close: actions row, inner column, flex wrapper, card — or every next entry nests
       }
     }
     el.innerHTML = html || '<p class="msg">No catalog entries.</p>';

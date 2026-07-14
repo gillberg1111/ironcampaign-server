@@ -94,7 +94,7 @@ describe('Schema v15 (foe_catalog.description)', () => {
       const shortcut = body.catalog.find(c => c.name === 'The Shortcut');
       assert.ok(shortcut, 'The Shortcut must be in the catalog');
       assert.ok(shortcut.description, 'The Shortcut must have a description');
-      assert.ok(shortcut.description.includes('Half the reps'));
+      assert.ok(shortcut.description.includes('path of least resistance'));
     } finally { srv.close(); }
   });
 });
