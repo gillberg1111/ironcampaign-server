@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IronCampaign</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#7a1f2b">
 <style>
 /* ── IronCampaign Field Manual, daylight edition — v2.67 ──
    Warm paper ground, crisp white sheets, oxblood kept as the single brand accent.
@@ -124,12 +129,14 @@ nav.tabs {
   background:var(--bg)
     repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(33,29,25,.012) 3px,rgba(33,29,25,.012) 4px);
 }
-/* wordmark anchors the sticky bar — decorative (empty alt), hidden on small screens */
+/* wordmark anchors the sticky bar — decorative (empty alt), hidden on small screens.
+   The Standing Bar mark sits left of the lettering (background-image keeps it decorative). */
 nav.tabs::before {
   content:'IRONCAMPAIGN' / '';
   font-family:var(--serif); font-weight:900; font-size:12.5px;
   letter-spacing:.18em; color:var(--oxblood-text);
-  padding:0 18px 2px 10px; white-space:nowrap;
+  padding:0 18px 2px 30px; white-space:nowrap;
+  background:url('/favicon.svg') no-repeat 8px center / 15px 15px;
 }
 @media (max-width:680px) { nav.tabs::before { content:none; } }
 nav.tabs button {
@@ -150,6 +157,7 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
 
 /* ── Auth screens: letterpress cover page ── */
 .auth-screen { max-width:400px; margin:96px auto 0; }
+.auth-mark { display:block; width:40px; height:40px; margin:0 auto 16px; }
 .auth-screen h2 {
   text-align:center; margin-bottom:28px; font-size:30px; font-weight:900;
   letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood-text);
@@ -299,6 +307,7 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
   <!-- CLAIM SCREEN (unclaimed server) -->
   <div id="view-claim" class="view" style="display:none">
     <div class="auth-screen">
+      <img class="auth-mark" src="/favicon.svg" alt="">
       <h2>Create Admin Account</h2>
       <div class="card">
         <div class="row"><input id="claimUser" placeholder="Username" style="flex:1" autocomplete="username"></div>
@@ -314,6 +323,7 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
   <!-- LOGIN SCREEN (claimed, no token) -->
   <div id="view-login" class="view" style="display:none">
     <div class="auth-screen">
+      <img class="auth-mark" src="/favicon.svg" alt="">
       <h2>Login</h2>
       <div class="card">
         <div class="row"><input id="loginUser" placeholder="Username" style="flex:1" autocomplete="username"></div>

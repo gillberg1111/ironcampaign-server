@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="server/public/ironcampaign-mark-cream.svg">
+    <img src="server/public/favicon.svg" alt="The Standing Bar — IronCampaign mark" width="72">
+  </picture>
+</p>
+
 # IronCampaign Sync Node
 
 Self-hosted sync server for **IronCampaign**, a strength-training field guide for iOS.

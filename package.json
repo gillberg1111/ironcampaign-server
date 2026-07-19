@@ -2,7 +2,7 @@
   "name": "ironcampaign",
   "private": true,
   "type": "module",
-  "version": "2.68.0",
+  "version": "2.69.0",
   "description": "IronCampaign monorepo root. The load-bearing modules in questlog-critical/ are imported by the server via relative paths, so their third-party deps must resolve from the repo root (Node resolves bare imports by walking up from the importing file's directory, which never reaches server/node_modules). questlog-critical/sync-auth/pairing.js needs argon2; declare it here.",
   "dependencies": {
     "argon2": "^0.41.0"
