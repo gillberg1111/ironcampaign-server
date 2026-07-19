@@ -639,8 +639,11 @@ export default function dataRoutes(db) {
   });
 
   router.post('/data/exercises', auth, (req, res) => {
-    const { name, trackingType } = req.body;
+    const { name, trackingType, equipment } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
+    if (equipment != null && !['barbell', 'kettlebell'].includes(equipment)) {
+      return res.status(400).json({ error: 'equipment must be barbell or kettlebell' });
+    }
     const puid = req.profileUuid;
     const uuid = randomUUID();
     const nowMs = Date.now();
@@ -650,6 +653,7 @@ export default function dataRoutes(db) {
       { table: 'exercises', uuid, field: 'name', value: name, hlc, deviceId: CONSOLE_DEVICE_ID },
     ];
     if (trackingType) changes.push({ table: 'exercises', uuid, field: 'tracking_type', value: trackingType, hlc, deviceId: CONSOLE_DEVICE_ID });
+    if (equipment) changes.push({ table: 'exercises', uuid, field: 'equipment', value: equipment, hlc, deviceId: CONSOLE_DEVICE_ID });
     applyConsoleChanges(db, puid, changes);
     res.status(201).json({ uuid });
   });
@@ -800,7 +804,7 @@ export default function dataRoutes(db) {
     seedExerciseLibraryIfNeeded(db, req.profileUuid);
     const puid = req.profileUuid;
     const exercises = db.prepare(
-      'SELECT uuid, name, tracking_type FROM exercises WHERE profile_uuid = ? AND deleted = 0 ORDER BY name'
+      'SELECT uuid, name, tracking_type, equipment FROM exercises WHERE profile_uuid = ? AND deleted = 0 ORDER BY name'
     ).all(puid);
     res.json({ exercises });
   });
@@ -868,7 +872,7 @@ export default function dataRoutes(db) {
   // ── Version ──
 
   router.get('/data/version', (_req, res) => {
-    res.json({ version: '2.69.0' });
+    res.json({ version: '2.70.0' });
   });
 
   return router;

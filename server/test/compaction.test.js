@@ -67,7 +67,7 @@ describe('Compaction', () => {
     ).all();
     assert.equal(tables.length, 1);
     const version = db.prepare('SELECT MAX(version) as v FROM schema_version').get();
-    assert.equal(version.v, 18);
+    assert.equal(version.v, 19);
   });
 
   // -- Cursor reporting --

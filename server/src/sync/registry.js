@@ -35,8 +35,8 @@ export const REGISTRY = {
   },
   exercises: {
     appendOnly: false,
-    columns: ['uuid', 'name', 'notes', 'tracking_type', 'builtin_id', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
-    mutableFields: ['name', 'notes', 'tracking_type'],
+    columns: ['uuid', 'name', 'notes', 'tracking_type', 'equipment', 'builtin_id', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+    mutableFields: ['name', 'notes', 'tracking_type', 'equipment'],
   },
   set_logs: {
     appendOnly: true,

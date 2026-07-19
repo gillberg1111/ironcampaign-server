@@ -10,7 +10,7 @@ describe('Schema v17 (exercises.builtin_id + exercise library)', () => {
     const db = new Database(':memory:');
     migrate(db);
     migrate(db);
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 18);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 19);
 
     const cols = db.pragma('table_info(exercises)').map(c => c.name);
     assert.ok(cols.includes('builtin_id'));

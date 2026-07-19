@@ -392,6 +392,11 @@ function migrate(db) {
       applyV18(db);
       db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(18);
     }
+
+    if (currentVersion < 19) {
+      applyV19(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(19);
+    }
   }
 
 function applyV11(db) {
@@ -454,6 +459,10 @@ function applyV15(db) {
 
   function applyV17(db) {
     addColumnIfMissing(db, 'exercises', 'builtin_id', 'TEXT');
+  }
+
+  function applyV19(db) {
+    addColumnIfMissing(db, 'exercises', 'equipment', 'TEXT');
   }
 
   function applyV18(db) {

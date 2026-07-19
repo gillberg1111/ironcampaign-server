@@ -13,7 +13,7 @@ describe('Schema v14 (schedule_rules + session/saga fields)', () => {
     migrate(db);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
     assert.ok(tables.includes('schedule_rules'));
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 18);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 19);
 
     const srCols = db.pragma('table_info(schedule_rules)').map(c => c.name);
     assert.ok(srCols.includes('name'));

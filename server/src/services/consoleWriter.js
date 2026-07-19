@@ -174,11 +174,6 @@ export function seedFoeCatalogIfNeeded(db, profileUuid) {
 }
 
 export function seedExerciseLibraryIfNeeded(db, profileUuid) {
-  const existing = db.prepare(
-    "SELECT COUNT(*) as cnt FROM exercises WHERE profile_uuid = ? AND builtin_id IS NOT NULL"
-  ).get(profileUuid);
-  if (existing.cnt > 0) return { seeded: 0 };
-
   const libPath = path.join(__dirname, '..', 'data', 'exercise-library.json');
   const data = JSON.parse(fs.readFileSync(libPath, 'utf-8'));
   if (!Array.isArray(data) || data.length === 0) return { seeded: 0 };
@@ -192,6 +187,7 @@ export function seedExerciseLibraryIfNeeded(db, profileUuid) {
 
   const now = Date.now();
   const changes = [];
+  let newEntryCount = 0;
 
   for (const entry of data) {
     if (seenBuiltinIDs.has(entry.builtin_id)) continue;
@@ -207,9 +203,36 @@ export function seedExerciseLibraryIfNeeded(db, profileUuid) {
       { table: 'exercises', uuid, field: 'tracking_type', value: entry.tracking_type, hlc, deviceId: CONSOLE_DEVICE_ID },
       { table: 'exercises', uuid, field: 'builtin_id', value: entry.builtin_id, hlc, deviceId: CONSOLE_DEVICE_ID },
     );
+    if (entry.equipment) {
+      changes.push({ table: 'exercises', uuid, field: 'equipment', value: entry.equipment, hlc, deviceId: CONSOLE_DEVICE_ID });
+    }
+    newEntryCount++;
   }
 
-  if (changes.length === 0) return { seeded: 0 };
+  // Phase 2: equipment backfill — rows seeded before v19 predate the column, and the insert
+  // loop skips them, so the flag would never arrive without this. NULL-only: a value the
+  // owner set (or cleared) on a row is never overridden.
+  const equipmentByBuiltin = {};
+  for (const entry of data) {
+    if (entry.equipment) equipmentByBuiltin[entry.builtin_id] = entry.equipment;
+  }
+  let backfilled = 0;
+  if (seenBuiltinIDs.size > 0) {
+    const existingRows = db.prepare(
+      'SELECT uuid, builtin_id, equipment FROM exercises WHERE profile_uuid = ? AND builtin_id IS NOT NULL AND deleted = 0'
+    ).all(profileUuid);
+    for (const row of existingRows) {
+      const equip = equipmentByBuiltin[row.builtin_id];
+      if (!equip || row.equipment != null) continue;
+      const hlc = tickConsoleClock(db, now);
+      changes.push(
+        { table: 'exercises', uuid: row.uuid, field: 'equipment', value: equip, hlc, deviceId: CONSOLE_DEVICE_ID },
+      );
+      backfilled++;
+    }
+  }
+
+  if (changes.length === 0) return { seeded: 0, backfilled: 0 };
 
   const store = new SqliteStorageAdapter(db, profileUuid);
   const insertLog = db.prepare(
@@ -219,14 +242,12 @@ export function seedExerciseLibraryIfNeeded(db, profileUuid) {
 
   const apply = db.transaction(() => {
     const results = applyBatch(store, changes);
-    let applied = 0;
     for (const { change, decision } of results) {
       if (decision === 'applied' || decision === 'appended' || decision === 'undeleted') {
         insertLog.run(
           profileUuid, change.table, change.uuid, change.field,
           JSON.stringify(change.value), change.hlc, change.deviceId, null, now
         );
-        applied++;
       }
     }
 
@@ -258,9 +279,8 @@ export function seedExerciseLibraryIfNeeded(db, profileUuid) {
       }
     }
 
-    return applied / 3;
   });
 
-  const count = apply();
-  return { seeded: count };
+  apply();
+  return { seeded: newEntryCount, backfilled };
 }

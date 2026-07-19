@@ -10,7 +10,7 @@ describe('Schema v10 (villain_events CHECK gains hydration)', () => {
     const db = new Database(':memory:');
     migrate(db);
     migrate(db);
-    assert.equal(db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v, 18);
+    assert.equal(db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v, 19);
 
     const insert = db.prepare(`INSERT INTO villain_events
       (uuid, villain_uuid, timestamp, reason, damage, xp, profile_uuid)
