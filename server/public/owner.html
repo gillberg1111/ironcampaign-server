@@ -756,6 +756,7 @@ async function doAddTemplate() {
     await apiPost(DATA + '/templates', { name });
     closeModal();
     toast('Template created');
+    invalidatePlanTemplates();
     loadTemplates();
   } catch (e) { toast(e.message); }
 }
@@ -765,6 +766,7 @@ async function doDeleteTemplate(uuid) {
   try {
     await api(DATA + '/templates/' + uuid, { method: 'DELETE' });
     toast('Template deleted');
+    invalidatePlanTemplates();
     loadTemplates();
   } catch (e) { toast(e.message); }
 }
@@ -772,12 +774,14 @@ async function doDeleteTemplate(uuid) {
 async function loadTemplates() {
   const el = document.getElementById('templatesList');
   try {
-    const data = await apiGet(DATA + '/templates');
-    const templates = data.templates || [];
+    invalidatePlanTemplates();
+    await fetchPlanTemplates();
+    const templates = planTemplates || [];
     if (!templates.length) { el.innerHTML = '<span class="msg">No templates yet.</span>'; return; }
     var html = '<table><thead><tr><th>Name</th><th>Exercises</th><th></th></tr></thead><tbody>';
     for (const t of templates) {
-      const exNames = (t.exercises || []).map(ex => ex.notes || 'Exercise').join(', ');
+      // Resolve real exercise names (was ex.notes — template_exercise notes are not names)
+      const exNames = templateSummary(t.uuid);
       html += '<tr><td>' + e(t.name) + '</td><td>' + e(exNames) + '</td>';
       html += '<td><button class="small danger" onclick="doDeleteTemplate(' + jsArg(t.uuid) + ')">Delete</button></td></tr>';
     }
@@ -999,6 +1003,53 @@ async function doAddVillain() {
 // ── Calendar ──
 let calYear, calMonth;
 let calOccurrences = []; // cached for day detail
+
+// Workout-template cache shared by every planning form (calendar rules, saga workouts) and
+// by the summaries shown next to scheduled items. Invalidated on template create/delete.
+let planTemplates = null;
+let planExercises = null;
+async function fetchPlanTemplates() {
+  if (!planTemplates) {
+    const [td, ed] = await Promise.all([apiGet(DATA + '/templates'), apiGet(DATA + '/exercises')]);
+    planTemplates = td.templates || [];
+    planExercises = ed.exercises || [];
+  }
+  return planTemplates;
+}
+function invalidatePlanTemplates() { planTemplates = null; planExercises = null; }
+function exerciseName(uuid) {
+  const ex = (planExercises || []).find(x => x.uuid === uuid);
+  return ex ? ex.name : 'Unknown exercise';
+}
+function workoutOptions(selectedUUID) {
+  let out = '<option value="">No workout attached — name only</option>';
+  for (const t of (planTemplates || [])) {
+    const n = (t.exercises || []).length;
+    out += '<option value="' + e(t.uuid) + '"' + (t.uuid === selectedUUID ? ' selected' : '') + '>'
+      + e(t.name) + (n ? ' (' + n + ' exercise' + (n === 1 ? '' : 's') + ')' : '') + '</option>';
+  }
+  return out;
+}
+function workoutSelectRow(id, selectedUUID) {
+  return '<div class="row"><label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px">Workout '
+    + '<select id="' + id + '">' + workoutOptions(selectedUUID) + '</select></label></div>';
+}
+function selectedWorkoutName(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel || !sel.value) return '';
+  const t = (planTemplates || []).find(x => x.uuid === sel.value);
+  return t ? t.name : '';
+}
+// "Squat 3×5 · Bench Press 3×5 · …" for a template uuid; '' when unknown/none
+function templateSummary(templateUUID) {
+  const t = (planTemplates || []).find(x => x.uuid === templateUUID);
+  if (!t) return '';
+  return (t.exercises || []).map(te => {
+    let s = exerciseName(te.exercise_uuid);
+    if (te.target_sets && te.target_reps) s += ' ' + te.target_sets + '×' + te.target_reps;
+    return s;
+  }).join(' · ');
+}
 function loadCalendar() {
   const now = new Date();
   if (!calYear) { calYear = now.getFullYear(); calMonth = now.getMonth() + 1; }
@@ -1039,7 +1090,8 @@ async function renderCalendar() {
   }
 }
 
-function showDayDetail(day) {
+async function showDayDetail(day) {
+  try { await fetchPlanTemplates(); } catch (_) { /* summaries degrade gracefully */ }
   const msDate = new Date(calYear, calMonth - 1, day).getTime();
   const dayOccs = calOccurrences.filter(o => {
     const od = new Date(o.date);
@@ -1065,9 +1117,12 @@ function showDayDetail(day) {
       html += '<span>' + e(o.name || 'Session') + sub + '</span>';
       html += '<span>';
       html += '<button class="small" onclick="doCompleteSession(' + jsArg(ruleUUID) + ',' + jsArg(pwUUID) + ',' + jsArg(dateKey) + ')">Complete Session</button>';
-      if (ruleUUID) html += ' <button class="small secondary" onclick="showEditRule(' + jsArg(ruleUUID) + ',' + jsArg(ruleName) + ',' + day + ',' + jsArg(rule.recurrence || 'once') + ',' + Number(rule.interval_days || 1) + ')">Edit</button>';
+      if (ruleUUID) html += ' <button class="small secondary" onclick="showEditRule(' + jsArg(ruleUUID) + ',' + jsArg(ruleName) + ',' + day + ',' + jsArg(rule.recurrence || 'once') + ',' + Number(rule.interval_days || 1) + ',' + jsArg(rule.template_uuid || '') + ')">Edit</button>';
       if (ruleUUID) html += ' <button class="small danger" onclick="doDeleteRule(' + jsArg(ruleUUID) + ')">Delete</button>';
-      html += '</span></div></div>';
+      html += '</span></div>';
+      const summary = o.templateUUID ? templateSummary(o.templateUUID) : '';
+      if (summary) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">' + e(summary) + '</div>';
+      html += '</div>';
     }
     html += '</div>';
   }
@@ -1084,7 +1139,7 @@ function showDayDetail(day) {
     html += '<p class="msg">No sessions scheduled for this day.</p>';
   }
 
-  html += '<div class="row" style="margin-top:8px"><button class="small" onclick="showAddRule(' + day + ')">+ Schedule Rule</button></div>';
+  html += '<div class="row" style="margin-top:8px"><button class="small" onclick="showAddRule(' + day + ')">+ Plan Workout</button></div>';
   html += '<div style="margin-top:8px"><button class="small secondary" onclick="document.getElementById(\'calDetail\').style.display=\'none\'">Close</button></div>';
   html += '</div>';
 
@@ -1121,11 +1176,13 @@ async function doCompleteSession(ruleUUID, plannedWorkoutUUID, dateKey) {
   } catch (e) { toast(e.message); }
 }
 
-function showAddRule(day) {
+async function showAddRule(day) {
+  try { await fetchPlanTemplates(); } catch (_) {}
   const dateStr = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(day).padStart(2, '0');
   document.getElementById('modalContent').innerHTML =
-    '<h3>New Schedule Rule</h3>' +
-    '<div class="row"><input id="srName" placeholder="Rule name" style="flex:1"></div>' +
+    '<h3>Plan a Workout</h3>' +
+    workoutSelectRow('srTemplate', '') +
+    '<div class="row"><input id="srName" placeholder="Name (defaults to workout name)" style="flex:1"></div>' +
     '<div class="row"><input id="srDate" type="date" value="' + dateStr + '"></div>' +
     '<div class="row"><select id="srRecur"><option value="once">Once</option><option value="weekly">Weekly</option><option value="custom">Custom (N days)</option></select></div>' +
     '<div class="row" id="srIntervalRow" style="display:none"><input id="srInterval" type="number" placeholder="Interval (days)" value="1" style="width:100px"></div>' +
@@ -1152,31 +1209,35 @@ function recurrenceFields(rec, sd, intervalVal) {
 }
 
 async function doAddRule() {
-  const name = document.getElementById('srName').value.trim();
+  const templateUUID = document.getElementById('srTemplate') ? document.getElementById('srTemplate').value : '';
+  const name = document.getElementById('srName').value.trim() || selectedWorkoutName('srTemplate');
   const sd = document.getElementById('srDate').value;
   const rec = document.getElementById('srRecur').value;
-  if (!name || !sd) return toast('Name and start date required');
+  if (!name || !sd) return toast('Pick a workout (or type a name) and a start date');
   try {
     const iv = document.getElementById('srInterval');
     const rf = recurrenceFields(rec, sd, iv ? iv.value : 1);
     const body = { name, startDate: sd, recurrence: rf.recurrence };
+    if (templateUUID) body.templateUUID = templateUUID;
     if (rf.intervalDays !== undefined) body.intervalDays = rf.intervalDays;
     if (rf.weekdayMask !== undefined) body.weekdayMask = rf.weekdayMask;
     if (document.getElementById('srEnd').value) body.endDate = document.getElementById('srEnd').value;
     await apiPost(DATA + '/schedule-rules', body);
     closeModal();
-    toast('Rule created');
+    toast('Workout planned');
     calOccurrences = []; renderCalendar();
   } catch (e) { toast(e.message); }
 }
 
-function showEditRule(uuid, currentName, day, recurrence, intervalDays) {
+async function showEditRule(uuid, currentName, day, recurrence, intervalDays, templateUUID) {
+  try { await fetchPlanTemplates(); } catch (_) {}
   const dateStr = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(day).padStart(2, '0');
   const selRec = recurrence === 'interval' ? 'custom' : (recurrence || 'once');
   const opt = (v, label) => '<option value="' + v + '"' + (selRec === v ? ' selected' : '') + '>' + label + '</option>';
   document.getElementById('modalContent').innerHTML =
-    '<h3>Edit Rule</h3>' +
-    '<div class="row"><input id="srName" placeholder="Rule name" value="' + e(currentName) + '" style="flex:1"></div>' +
+    '<h3>Edit Planned Workout</h3>' +
+    workoutSelectRow('srTemplate', templateUUID || '') +
+    '<div class="row"><input id="srName" placeholder="Name" value="' + e(currentName) + '" style="flex:1"></div>' +
     '<div class="row"><input id="srDate" type="date" value="' + dateStr + '"></div>' +
     '<div class="row"><select id="srRecur">' + opt('once', 'Once') + opt('weekly', 'Weekly') + opt('custom', 'Custom (N days)') + '</select></div>' +
     '<div class="row" id="srIntervalRow" style="display:' + (selRec === 'custom' ? 'flex' : 'none') + '"><input id="srInterval" type="number" placeholder="Interval (days)" value="' + Number(intervalDays || 1) + '" style="width:100px"></div>' +
@@ -1197,10 +1258,12 @@ async function doSaveRule(uuid) {
     const rf = recurrenceFields(rec, sd, iv ? iv.value : 1);
     // null (not undefined) clears the field the new recurrence doesn't use, so
     // switching once<->weekly<->custom doesn't leave a stale mask/interval behind.
+    const tplSel = document.getElementById('srTemplate');
     const body = {
       name, start_date: sd, recurrence: rf.recurrence,
       interval_days: rf.intervalDays !== undefined ? rf.intervalDays : null,
       weekday_mask: rf.weekdayMask !== undefined ? rf.weekdayMask : null,
+      template_uuid: tplSel && tplSel.value ? tplSel.value : null,
     };
     await apiPut(DATA + '/schedule-rules/' + uuid, body);
     closeModal();
@@ -1223,6 +1286,7 @@ async function loadSagas() {
   const el = document.getElementById('sagasContent');
   try {
     const data = await apiGet(DATA + '/sagas');
+    try { await fetchPlanTemplates(); } catch (_) {}
     let html = '';
     for (const s of (data.sagas || [])) {
       html += '<div class="card">';
@@ -1238,8 +1302,14 @@ async function loadSagas() {
           const wpw = (s.plannedWorkouts || []).filter(p => p.chapter_uuid === ch.uuid);
           const isCurrent = s.current_chapter_uuid === ch.uuid;
           html += '<tr><td>' + e(ch.name) + (isCurrent ? ' <span style="color:var(--green);font-size:11px">CURRENT</span>' : '') + '</td>';
-          html += '<td>' + ch.week_index + '</td>';
-          html += '<td>' + wpw.map(p => e(p.name) + ' <span style="font-size:10px;color:var(--text-dim)">[Day ' + (p.day_index || 0) + ']</span> <a href="#" onclick="showEditPW(' + jsArg(p.uuid) + ',' + jsArg(p.name) + ',' + (p.day_index||0) + ');return false" style="font-size:10px">edit</a> <a href="#" onclick="doDeletePW(' + jsArg(p.uuid) + ');return false" style="font-size:10px;color:var(--red)">del</a>') + ' ' + '</td>';
+          html += '<td>' + (ch.week_index + 1) + '</td>';
+          html += '<td>' + wpw.map(p => {
+            const summary = p.template_uuid ? templateSummary(p.template_uuid) : '';
+            return e(p.name) + ' <span style="font-size:10px;color:var(--text-dim)">[Day ' + ((p.day_index || 0) + 1) + ']</span>'
+              + (summary ? '<div style="font-size:10px;color:var(--text-dim)">' + e(summary) + '</div>' : '')
+              + ' <a href="#" onclick="showEditPW(' + jsArg(p.uuid) + ',' + jsArg(p.name) + ',' + (p.day_index||0) + ',' + jsArg(p.template_uuid || '') + ');return false" style="font-size:10px">edit</a>'
+              + ' <a href="#" onclick="doDeletePW(' + jsArg(p.uuid) + ');return false" style="font-size:10px;color:var(--red)">del</a>';
+          }).join('') + ' ' + '</td>';
           html += '<td>';
           html += '<button class="small secondary" onclick="showEditChapter(' + jsArg(ch.uuid) + ',' + jsArg(ch.name) + ',' + ch.week_index + ')">Edit</button> ';
           if (!isCurrent) html += '<button class="small secondary" onclick="doSetCurrentChapter(' + jsArg(s.uuid) + ',' + jsArg(ch.uuid) + ')">Set Current</button> ';
@@ -1248,8 +1318,9 @@ async function loadSagas() {
         }
         html += '</tbody></table>';
       }
+      const nextWeek = (s.chapters && s.chapters.length) ? Math.max(...s.chapters.map(c => c.week_index)) + 1 : 0;
       html += '<div class="row" style="margin-top:6px">';
-      html += '<button class="small" onclick="showAddChapter(' + jsArg(s.uuid) + ')">+ Chapter</button>';
+      html += '<button class="small" onclick="showAddChapter(' + jsArg(s.uuid) + ',' + nextWeek + ')">+ Chapter</button>';
       html += '</div>';
       html += '</div>';
     }
@@ -1303,21 +1374,22 @@ async function doSaveSaga(uuid) {
   } catch (e) { toast(e.message); }
 }
 
-function showAddChapter(sagaUUID) {
+// Week is auto-assigned (next free week, like iOS) — the chapter's week decides WHEN its
+// workouts land on the calendar: saga start date + (week − 1) × 7 + (day − 1).
+function showAddChapter(sagaUUID, nextWeek) {
   document.getElementById('modalContent').innerHTML =
     '<h3>New Chapter</h3>' +
     '<div class="row"><input id="chName" placeholder="Chapter name" style="flex:1"></div>' +
-    '<div class="row"><input id="chWeek" type="number" placeholder="Week index" value="0" style="width:80px"></div>' +
-    '<div class="row" style="margin-top:12px"><button onclick="doAddChapter(' + jsArg(sagaUUID) + ')">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+    '<p class="msg" style="font-size:11px">This becomes Week ' + (nextWeek + 1) + ' of the program — its workouts land on that week of the calendar (you can change the week later via Edit).</p>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddChapter(' + jsArg(sagaUUID) + ',' + nextWeek + ')">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
   document.getElementById('modal').style.display = 'flex';
 }
 
-async function doAddChapter(sagaUUID) {
+async function doAddChapter(sagaUUID, weekIndex) {
   const name = document.getElementById('chName').value.trim();
-  const week = parseInt(document.getElementById('chWeek').value) || 0;
   if (!name) return toast('Name required');
   try {
-    await apiPost(DATA + '/chapters', { sagaUUID, name, weekIndex: week });
+    await apiPost(DATA + '/chapters', { sagaUUID, name, weekIndex: weekIndex || 0 });
     closeModal();
     toast('Chapter created');
     loadSagas();
@@ -1328,7 +1400,7 @@ function showEditChapter(uuid, name, weekIndex) {
   document.getElementById('modalContent').innerHTML =
     '<h3>Edit Chapter</h3>' +
     '<div class="row"><input id="chName" placeholder="Chapter name" value="' + e(name) + '" style="flex:1"></div>' +
-    '<div class="row"><input id="chWeek" type="number" placeholder="Week index" value="' + weekIndex + '" style="width:80px"></div>' +
+    '<div class="row"><label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px">Week <input id="chWeek" type="number" min="1" value="' + (weekIndex + 1) + '" style="width:80px"></label> <span class="msg" style="font-size:11px">Week 1 starts at the saga start date; this chapter\'s workouts land on its week.</span></div>' +
     '<div class="row"><h4 style="width:100%;margin-top:8px;font-size:12px;color:var(--gray)">Planned Workouts</h4></div>';
   document.getElementById('modalContent').innerHTML +=
     '<div class="row"><button class="small" onclick="showAddPW(' + jsArg(uuid) + ')">+ Add Workout</button></div>' +
@@ -1338,7 +1410,8 @@ function showEditChapter(uuid, name, weekIndex) {
 
 async function doSaveChapter(uuid) {
   const name = document.getElementById('chName').value.trim();
-  const week = parseInt(document.getElementById('chWeek').value) || 0;
+  // Displayed 1-based (Week 1 = saga start); stored 0-based
+  const week = Math.max(0, (parseInt(document.getElementById('chWeek').value) || 1) - 1);
   if (!name) return toast('Name required');
   try {
     await apiPut(DATA + '/chapters/' + uuid, { name, week_index: week });
@@ -1365,42 +1438,61 @@ async function doSetCurrentChapter(sagaUUID, chapterUUID) {
   } catch (e) { toast(e.message); }
 }
 
-function showAddPW(chapterUUID) {
+// Day 1..7 within the chapter's week (stored 0-based)
+function daySelectRow(id, dayIndex) {
+  let opts = '';
+  for (let d = 0; d < 7; d++) opts += '<option value="' + d + '"' + (d === dayIndex ? ' selected' : '') + '>Day ' + (d + 1) + '</option>';
+  return '<div class="row"><label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px">Day of week '
+    + '<select id="' + id + '">' + opts + '</select></label></div>';
+}
+
+async function showAddPW(chapterUUID) {
+  try { await fetchPlanTemplates(); } catch (_) {}
   document.getElementById('modalContent').innerHTML =
     '<h3>New Planned Workout</h3>' +
-    '<div class="row"><input id="pwName" placeholder="Workout name" style="flex:1"></div>' +
-    '<div class="row"><input id="pwDay" type="number" placeholder="Day index" value="0" style="width:80px"></div>' +
+    workoutSelectRow('pwTemplate', '') +
+    '<div class="row"><input id="pwName" placeholder="Name (defaults to workout name)" style="flex:1"></div>' +
+    daySelectRow('pwDay', 0) +
     '<div class="row" style="margin-top:12px"><button onclick="doAddPW(' + jsArg(chapterUUID) + ')">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
   document.getElementById('modal').style.display = 'flex';
 }
 
 async function doAddPW(chapterUUID) {
-  const name = document.getElementById('pwName').value.trim();
+  const templateUUID = document.getElementById('pwTemplate') ? document.getElementById('pwTemplate').value : '';
+  const name = document.getElementById('pwName').value.trim() || selectedWorkoutName('pwTemplate');
   const day = parseInt(document.getElementById('pwDay').value) || 0;
-  if (!name) return toast('Name required');
+  if (!name) return toast('Pick a workout (or type a name)');
   try {
-    await apiPost(DATA + '/planned-workouts', { chapterUUID, name, dayIndex: day });
+    const body = { chapterUUID, name, dayIndex: day };
+    if (templateUUID) body.templateUUID = templateUUID;
+    await apiPost(DATA + '/planned-workouts', body);
     closeModal();
     toast('Workout created');
     loadSagas();
   } catch (e) { toast(e.message); }
 }
 
-function showEditPW(uuid, name, dayIndex) {
+async function showEditPW(uuid, name, dayIndex, templateUUID) {
+  try { await fetchPlanTemplates(); } catch (_) {}
   document.getElementById('modalContent').innerHTML =
     '<h3>Edit Planned Workout</h3>' +
+    workoutSelectRow('pwTemplate', templateUUID || '') +
     '<div class="row"><input id="pwName" placeholder="Workout name" value="' + e(name) + '" style="flex:1"></div>' +
-    '<div class="row"><input id="pwDay" type="number" placeholder="Day index" value="' + dayIndex + '" style="width:80px"></div>' +
+    daySelectRow('pwDay', dayIndex || 0) +
     '<div class="row" style="margin-top:12px"><button onclick="doSavePW(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
   document.getElementById('modal').style.display = 'flex';
 }
 
 async function doSavePW(uuid) {
+  const tplSel = document.getElementById('pwTemplate');
   const name = document.getElementById('pwName').value.trim();
   const day = parseInt(document.getElementById('pwDay').value) || 0;
   if (!name) return toast('Name required');
   try {
-    await apiPut(DATA + '/planned-workouts/' + uuid, { name, day_index: day });
+    await apiPut(DATA + '/planned-workouts/' + uuid, {
+      name, day_index: day,
+      template_uuid: tplSel && tplSel.value ? tplSel.value : null,
+    });
     closeModal();
     toast('Workout saved');
     loadSagas();
