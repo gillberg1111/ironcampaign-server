@@ -441,7 +441,7 @@ export default function dataRoutes(db) {
         `SELECT s.uuid as session_uuid, MIN(sl.completed) as all_completed
          FROM set_logs sl JOIN sessions s ON s.uuid = sl.session_uuid AND s.profile_uuid = sl.profile_uuid
          WHERE sl.profile_uuid = ? AND sl.exercise_uuid = ?
-         GROUP BY s.uuid ORDER BY s.date DESC LIMIT 2`
+         GROUP BY s.uuid ORDER BY s.date DESC, s.rowid DESC LIMIT 2`
       ).all(puid, entry.exerciseUUID);
       priorFails[entry.exerciseUUID] = rows.length === 2 && rows.every(r => r.all_completed === 0);
     }
@@ -1076,7 +1076,7 @@ export default function dataRoutes(db) {
   // ── Version ──
 
   router.get('/data/version', (_req, res) => {
-    res.json({ version: '2.72.0' });
+    res.json({ version: '2.72.1' });
   });
 
   return router;
