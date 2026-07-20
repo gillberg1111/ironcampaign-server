@@ -13,7 +13,7 @@ describe('Schema v9 (foe_catalog)', () => {
     migrate(db);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
     assert.ok(tables.includes('foe_catalog'));
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 19);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 20);
 
     const catalogCols = db.pragma('table_info(foe_catalog)').map(c => c.name);
     assert.ok(catalogCols.includes('name'));

@@ -10,7 +10,7 @@ describe('Schema v11/v12 (tracking types, set_logs columns, planned_workouts)', 
     const db = new Database(':memory:');
     migrate(db);
     migrate(db);
-    assert.equal(db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v, 19);
+    assert.equal(db.prepare('SELECT MAX(version) AS v FROM schema_version').get().v, 20);
 
     const exCols = db.pragma('table_info(exercises)').map(c => c.name);
     assert.ok(exCols.includes('tracking_type'));

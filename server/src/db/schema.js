@@ -397,6 +397,11 @@ function migrate(db) {
       applyV19(db);
       db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(19);
     }
+
+    if (currentVersion < 20) {
+      applyV20(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(20);
+    }
   }
 
 function applyV11(db) {
@@ -463,6 +468,10 @@ function applyV15(db) {
 
   function applyV19(db) {
     addColumnIfMissing(db, 'exercises', 'equipment', 'TEXT');
+  }
+
+  function applyV20(db) {
+    addColumnIfMissing(db, 'schedule_rules', 'schedule_group', 'TEXT');
   }
 
   function applyV18(db) {

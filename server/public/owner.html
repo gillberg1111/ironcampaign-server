@@ -292,6 +292,18 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
 }
 
 /* ── Reduced motion (spec §9): neutralize every added transition/animation ── */
+/* Quick-log set chips (spec v2.58): thumb-sized so sets can be tapped mid-workout */
+.setchip {
+  width:44px; height:44px; border-radius:10px; font-weight:700; font-size:15px;
+  border:1.5px solid var(--line); background:var(--card); color:var(--text-dim);
+}
+.setchip.on { background:var(--oxblood); border-color:var(--oxblood); color:#f5f1ea; }
+.ql-ex { margin-top:10px; padding-top:8px; border-top:1px solid var(--line); }
+@media (max-width:520px) {
+  .day-detail .row.sb { flex-wrap:wrap; gap:6px; }
+  #modalContent input[type=number] { font-size:16px; } /* stops iOS zoom-on-focus */
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     transition-duration:.001ms !important;
@@ -360,6 +372,7 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
     <div class="row sb" style="margin-bottom:12px">
       <h2>Calendar</h2>
       <div class="row">
+        <button class="small" onclick="showScheduleWizard()">+ Schedule</button>
         <button class="small secondary" onclick="calPrev()">&larr;</button>
         <span id="calLabel" style="font-weight:700;min-width:120px;text-align:center"></span>
         <button class="small secondary" onclick="calNext()">&rarr;</button>
@@ -373,10 +386,18 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
   <!-- SAGAS TAB -->
   <div id="view-sagas" class="view">
     <div class="row sb" style="margin-bottom:12px">
-      <h2>Sagas</h2>
-      <button class="small" onclick="showAddSaga()">+ New Saga</button>
+      <h2>Workouts</h2>
+      <button class="small" onclick="showAddWorkout()">+ New Workout</button>
     </div>
-    <div id="sagasContent">Loading…</div>
+    <div id="workoutsContent">Loading…</div>
+    <details style="margin-top:28px">
+      <summary style="cursor:pointer;font-weight:700">Story blocks (multi-week arcs)</summary>
+      <div class="row sb" style="margin:12px 0">
+        <span class="msg">Optional narrative structure — chapters place workouts on calendar weeks.</span>
+        <button class="small" onclick="showAddSaga()">+ New Block</button>
+      </div>
+      <div id="sagasContent">Loading…</div>
+    </details>
   </div>
 
   <!-- HISTORY TAB -->
@@ -596,7 +617,7 @@ function switchTab(name) {
   if (!token) { toast('Login first — enter your credentials to continue'); return; }
   if (name === 'today') loadToday();
   else if (name === 'calendar') loadCalendar();
-  else if (name === 'sagas') loadSagas();
+  else if (name === 'sagas') { loadWorkouts(); loadSagas(); }
   else if (name === 'history') loadHistory();
   else if (name === 'roster') loadRoster();
   else if (name === 'settings') { loadDevices(); loadSettings(); }
@@ -1116,9 +1137,10 @@ async function showDayDetail(day) {
       html += '<div class="item"><div class="row sb">';
       html += '<span>' + e(o.name || 'Session') + sub + '</span>';
       html += '<span>';
-      html += '<button class="small" onclick="doCompleteSession(' + jsArg(ruleUUID) + ',' + jsArg(pwUUID) + ',' + jsArg(dateKey) + ')">Complete Session</button>';
+      if (o.templateUUID) html += '<button class="small" onclick="showQuickLog(' + jsArg(o.templateUUID) + ',' + jsArg(ruleUUID) + ',' + jsArg(pwUUID) + ',' + jsArg(dateKey) + ')">Log Sets</button> ';
+      html += '<button class="small' + (o.templateUUID ? ' secondary' : '') + '" onclick="doCompleteSession(' + jsArg(ruleUUID) + ',' + jsArg(pwUUID) + ',' + jsArg(dateKey) + ')">Complete</button>';
       if (ruleUUID) html += ' <button class="small secondary" onclick="showEditRule(' + jsArg(ruleUUID) + ',' + jsArg(ruleName) + ',' + day + ',' + jsArg(rule.recurrence || 'once') + ',' + Number(rule.interval_days || 1) + ',' + jsArg(rule.template_uuid || '') + ')">Edit</button>';
-      if (ruleUUID) html += ' <button class="small danger" onclick="doDeleteRule(' + jsArg(ruleUUID) + ')">Delete</button>';
+      if (ruleUUID) html += ' <button class="small danger" onclick="doDeleteRule(' + jsArg(ruleUUID) + ',' + jsArg(rule.schedule_group || '') + ')">Delete</button>';
       html += '</span></div>';
       const summary = o.templateUUID ? templateSummary(o.templateUUID) : '';
       if (summary) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">' + e(summary) + '</div>';
@@ -1139,7 +1161,7 @@ async function showDayDetail(day) {
     html += '<p class="msg">No sessions scheduled for this day.</p>';
   }
 
-  html += '<div class="row" style="margin-top:8px"><button class="small" onclick="showAddRule(' + day + ')">+ Plan Workout</button></div>';
+  html += '<div class="row" style="margin-top:8px"><button class="small" onclick="showAddRule(' + day + ')">+ Workout</button></div>';
   html += '<div style="margin-top:8px"><button class="small secondary" onclick="document.getElementById(\'calDetail\').style.display=\'none\'">Close</button></div>';
   html += '</div>';
 
@@ -1272,13 +1294,303 @@ async function doSaveRule(uuid) {
   } catch (e) { toast(e.message); }
 }
 
-async function doDeleteRule(uuid) {
-  if (!confirm('Delete this schedule rule?')) return;
+async function doDeleteRule(uuid, scheduleGroup) {
+  if (!confirm('Delete this workout from the calendar?')) return;
+  let shift = false;
+  if (scheduleGroup) {
+    shift = confirm('It belongs to a schedule. Shift the later workouts up a slot so the rotation stays in sync?\n\nOK = shift up · Cancel = leave the rest where they are');
+  }
   try {
-    await api(DATA + '/schedule-rules/' + uuid, { method: 'DELETE' });
-    toast('Rule deleted');
+    await api(DATA + '/schedule-rules/' + uuid + (shift ? '?shift=1' : ''), { method: 'DELETE' });
+    toast(shift ? 'Deleted — rotation shifted up' : 'Deleted');
     calOccurrences = []; renderCalendar();
   } catch (e) { toast(e.message); }
+}
+
+// ── Schedule wizard (spec v2.58) ──
+const SCHEDULE_PRESETS = [
+  { label: 'Alternating A / B — every other day', pattern: ['A', 'Rest', 'B', 'Rest'] },
+  { label: 'Mon/Wed/Fri alternating A / B (2-week cycle, start on a Monday)', pattern: ['A', 'Rest', 'B', 'Rest', 'A', 'Rest', 'Rest', 'B', 'Rest', 'A', 'Rest', 'B', 'Rest', 'Rest'] },
+  { label: 'Push / Pull / Legs — 6-day week', pattern: ['A', 'B', 'C', 'A', 'B', 'C', 'Rest'] },
+  { label: 'Upper / Lower — 4-day week', pattern: ['A', 'B', 'Rest', 'A', 'B', 'Rest', 'Rest'] },
+  { label: '5-day split A–E (weekends off)', pattern: ['A', 'B', 'C', 'D', 'E', 'Rest', 'Rest'] },
+  { label: 'Custom pattern…', pattern: null },
+];
+
+async function showScheduleWizard() {
+  try { await fetchPlanTemplates(); } catch (_) {}
+  const today = new Date();
+  const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  let html = '<h3>New Schedule</h3>';
+  html += '<div class="row"><select id="schedPreset" style="max-width:100%">'
+    + SCHEDULE_PRESETS.map((p, i) => '<option value="' + i + '">' + e(p.label) + '</option>').join('') + '</select></div>';
+  html += '<div class="row" id="schedCustomRow" style="display:none"><input id="schedCustom" placeholder="A, Rest, B, Rest" style="flex:1"></div>';
+  html += '<div class="row"><label style="font-size:12px;color:var(--text-dim)">Starts <input id="schedStart" type="date" value="' + todayStr + '"></label>'
+    + '<label style="font-size:12px;color:var(--text-dim)">for <input id="schedWeeks" type="number" min="1" max="26" value="8" style="width:56px"> weeks</label></div>';
+  html += '<div id="schedSlots"></div>';
+  html += '<div class="row" style="margin-top:12px"><button onclick="doCreateSchedule()">Create Schedule</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  html += '<div id="schedExisting" style="margin-top:16px"></div>';
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').style.display = 'flex';
+
+  const renderSlots = () => {
+    const pat = currentWizardPattern();
+    const letters = [...new Set(pat.filter(s => s.toLowerCase() !== 'rest'))];
+    document.getElementById('schedSlots').innerHTML = letters.map(l =>
+      '<div class="row"><label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px">' + e(l) + ' = '
+      + '<select id="slot-' + e(l) + '">' + workoutOptions('') + '</select></label></div>'
+    ).join('');
+  };
+  document.getElementById('schedPreset').onchange = function () {
+    document.getElementById('schedCustomRow').style.display = SCHEDULE_PRESETS[this.value].pattern === null ? 'flex' : 'none';
+    renderSlots();
+  };
+  document.getElementById('schedCustom').oninput = renderSlots;
+  renderSlots();
+  renderExistingSchedules();
+}
+
+function currentWizardPattern() {
+  const idx = parseInt(document.getElementById('schedPreset').value);
+  const preset = SCHEDULE_PRESETS[idx];
+  if (preset.pattern) return preset.pattern;
+  return document.getElementById('schedCustom').value.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+async function doCreateSchedule() {
+  const pattern = currentWizardPattern();
+  if (!pattern.length) return toast('Pattern required (e.g. A, Rest, B, Rest)');
+  const letters = [...new Set(pattern.filter(s => s.toLowerCase() !== 'rest'))];
+  if (!letters.length) return toast('Pattern needs at least one workout slot');
+  const assignments = {};
+  for (const l of letters) {
+    const sel = document.getElementById('slot-' + l);
+    if (sel && sel.value) assignments[l] = sel.value;
+  }
+  const startDate = document.getElementById('schedStart').value;
+  const weeks = parseInt(document.getElementById('schedWeeks').value) || 8;
+  if (!startDate) return toast('Start date required');
+  try {
+    const r = await apiPost(DATA + '/schedules', { startDate, pattern, assignments, weeks });
+    closeModal();
+    toast('Schedule created — ' + r.created + ' workouts placed');
+    calOccurrences = []; renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+async function renderExistingSchedules() {
+  const el = document.getElementById('schedExisting');
+  try {
+    const data = await apiGet(DATA + '/schedules');
+    if (!data.schedules.length) { el.innerHTML = ''; return; }
+    let html = '<h4 style="font-size:12px;color:var(--text-dim)">Existing schedules</h4>';
+    for (const s of data.schedules) {
+      html += '<div class="row sb"><span style="font-size:13px">' + e(s.name || 'Schedule') + ' · ' + e(s.firstDate) + ' → ' + e(s.lastDate) + ' (' + s.remaining + ' workouts)</span>'
+        + '<button class="small danger" onclick="doDeleteSchedule(' + jsArg(s.group) + ')">Delete</button></div>';
+    }
+    el.innerHTML = html;
+  } catch (_) { el.innerHTML = ''; }
+}
+
+async function doDeleteSchedule(group) {
+  if (!confirm('Delete this schedule and every workout day it placed on the calendar?')) return;
+  try {
+    await api(DATA + '/schedules/' + group, { method: 'DELETE' });
+    toast('Schedule deleted');
+    renderExistingSchedules();
+    calOccurrences = []; renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+// ── Quick-log (spec v2.58): tap off sets, then let the server suggest progression ──
+let quickLogCtx = null;
+
+async function showQuickLog(templateUUID, ruleUUID, pwUUID, dateKey) {
+  try { await fetchPlanTemplates(); } catch (_) {}
+  const t = (planTemplates || []).find(x => x.uuid === templateUUID);
+  if (!t) return toast('Workout not found');
+  quickLogCtx = { templateUUID, ruleUUID, pwUUID, dateKey };
+  let html = '<h3>' + e(t.name) + '</h3>';
+  for (const te of (t.exercises || [])) {
+    const sets = Math.max(1, te.target_sets || 3);
+    html += '<div class="ql-ex" data-te="' + e(te.uuid) + '" data-ex="' + e(te.exercise_uuid) + '" data-w="' + (te.target_weight_kg ?? 0) + '" data-sets="' + sets + '" data-reps="' + (te.target_reps ?? 0) + '">';
+    html += '<div class="row sb"><span>' + e(exerciseName(te.exercise_uuid)) + '</span><span class="msg" style="font-size:12px">'
+      + sets + ' × ' + (te.target_reps ?? '—') + (te.target_weight_kg ? ' @ ' + displayWeight(te.target_weight_kg) : '') + '</span></div>';
+    html += '<div class="row" style="gap:8px;flex-wrap:wrap">';
+    for (let i = 0; i < sets; i++) html += '<button class="setchip" onclick="this.classList.toggle(\'on\')">' + (i + 1) + '</button>';
+    html += '</div></div>';
+  }
+  html += '<div class="row" style="margin-top:10px"><label style="font-size:12px;color:var(--text-dim)">Duration <input id="qlDur" type="number" min="5" max="240" value="45" style="width:60px"> min</label></div>';
+  html += '<div class="row" style="margin-top:12px"><button onclick="doQuickLog()">Finish &amp; Log</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doQuickLog() {
+  const entries = [];
+  document.querySelectorAll('#modalContent .ql-ex').forEach(exEl => {
+    const targetSets = parseInt(exEl.dataset.sets);
+    const completedSets = exEl.querySelectorAll('.setchip.on').length;
+    entries.push({
+      exerciseUUID: exEl.dataset.ex,
+      templateExerciseUUID: exEl.dataset.te,
+      weightKg: parseFloat(exEl.dataset.w) || 0,
+      targetSets,
+      targetReps: parseInt(exEl.dataset.reps) || 0,
+      completedSets,
+      failed: completedSets < targetSets,
+    });
+  });
+  if (!entries.length) return;
+  try {
+    // Same target resolution as Complete: featured foe first, constant heavy as fallback
+    const ov = await apiGet(DATA + '/overview');
+    const target = ov.villains.find(v => v.slot === 'featured' && v.hp > 0)
+      || ov.villains.find(v => v.slot === 'constant_heavy' && v.hp > 0);
+    if (!target) return toast('No active foe to fight.');
+    const body = {
+      villainUUID: target.uuid,
+      durationMinutes: parseInt(document.getElementById('qlDur').value) || 45,
+      sessionType: (parseInt(document.getElementById('qlDur').value) || 45) >= 30 ? 'fullScheduled' : 'shortSession',
+      scheduleRuleUUID: quickLogCtx.ruleUUID || null,
+      plannedWorkoutUUID: quickLogCtx.pwUUID || null,
+      scheduledDate: quickLogCtx.dateKey || null,
+      entries,
+    };
+    const r = await apiPost(DATA + '/quicklog', body);
+    closeModal();
+    toast('Workout logged');
+    for (const s of (r.suggestions || [])) {
+      const exName = exerciseName(s.exerciseUUID);
+      const next = displayWeight(s.nextWeightKg);
+      const msg = s.suggest === 'increase'
+        ? exName + ': all sets done. Raise to ' + next + ' next time?'
+        : exName + ': third miss in a row. Deload to ' + next + '?';
+      if (s.templateExerciseUUID && confirm(msg)) {
+        await apiPut(DATA + '/template-exercises/' + s.templateExerciseUUID, { target_weight_kg: s.nextWeightKg });
+      }
+    }
+    invalidatePlanTemplates();
+    calOccurrences = []; renderCalendar();
+  } catch (e) { toast(e.message); }
+}
+
+// ── Workouts (spec v2.58: templates are the first-class thing on the Programs tab) ──
+const KG_PER_LB = 0.45359237;
+function displayWeight(kg) {
+  if (kg === null || kg === undefined) return '';
+  if (weightUnitSetting === 'lbs') return (Math.round((kg / KG_PER_LB) / 2.5) * 2.5) + ' lb';
+  return (Math.round(kg * 100) / 100) + ' kg';
+}
+function inputWeightValue(kg) {
+  if (kg === null || kg === undefined) return '';
+  return weightUnitSetting === 'lbs' ? Math.round((kg / KG_PER_LB) / 2.5) * 2.5 : Math.round(kg * 100) / 100;
+}
+function parseWeightInput(v) {
+  const n = parseFloat(v);
+  if (isNaN(n) || n <= 0) return null;
+  return weightUnitSetting === 'lbs' ? n * KG_PER_LB : n;
+}
+const unitLabel = () => weightUnitSetting === 'lbs' ? 'lb' : 'kg';
+
+async function loadWorkouts() {
+  const el = document.getElementById('workoutsContent');
+  try {
+    invalidatePlanTemplates();
+    await fetchPlanTemplates();
+    if (!planTemplates.length) {
+      el.innerHTML = '<p class="msg">No workouts yet. Create one (A, B, cool-down day…) and add its exercises with starting weight, sets, and reps.</p>';
+      return;
+    }
+    let html = '';
+    for (const t of planTemplates) {
+      html += '<div class="card">';
+      html += '<div class="row sb"><strong>' + e(t.name) + '</strong><span>';
+      html += '<button class="small danger" onclick="doDeleteWorkout(' + jsArg(t.uuid) + ',' + jsArg(t.name) + ')">Delete</button></span></div>';
+      html += '<table><tbody>';
+      for (const te of (t.exercises || [])) {
+        html += '<tr><td>' + e(exerciseName(te.exercise_uuid)) + '</td>';
+        html += '<td style="white-space:nowrap"><input type="number" min="1" value="' + (te.target_sets ?? '') + '" style="width:52px" onchange="saveTE(' + jsArg(te.uuid) + ',\'target_sets\',this.value)"> sets</td>';
+        html += '<td style="white-space:nowrap"><input type="number" min="1" value="' + (te.target_reps ?? '') + '" style="width:52px" onchange="saveTE(' + jsArg(te.uuid) + ',\'target_reps\',this.value)"> reps</td>';
+        html += '<td style="white-space:nowrap"><input type="number" min="0" step="' + (weightUnitSetting === 'lbs' ? '2.5' : '1.25') + '" value="' + inputWeightValue(te.target_weight_kg) + '" style="width:70px" onchange="saveTEWeight(' + jsArg(te.uuid) + ',this.value)"> ' + unitLabel() + '</td>';
+        html += '<td><button class="small danger" onclick="doDeleteTE(' + jsArg(te.uuid) + ')">Del</button></td></tr>';
+      }
+      html += '</tbody></table>';
+      html += '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">';
+      html += '<select id="addEx-' + t.uuid + '">' + (planExercises || []).map(x => '<option value="' + e(x.uuid) + '">' + e(x.name) + '</option>').join('') + '</select>';
+      html += '<input type="number" min="1" value="3" id="addSets-' + t.uuid + '" style="width:52px" title="Sets"> sets';
+      html += '<input type="number" min="1" value="5" id="addReps-' + t.uuid + '" style="width:52px" title="Reps"> reps';
+      html += '<input type="number" min="0" step="' + (weightUnitSetting === 'lbs' ? '2.5' : '1.25') + '" id="addW-' + t.uuid + '" style="width:70px" placeholder="weight"> ' + unitLabel();
+      html += '<button class="small" onclick="doAddTE(' + jsArg(t.uuid) + ')">+ Add Exercise</button>';
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+  } catch (err) { el.innerHTML = '<p class="error">' + err.message + '</p>'; }
+}
+
+function showAddWorkout() {
+  document.getElementById('modalContent').innerHTML =
+    '<h3>New Workout</h3>' +
+    '<div class="row"><input id="newWName" placeholder="Workout name (A, B, Legs, Cool-down…)" style="flex:1"></div>' +
+    '<div class="row" style="margin-top:12px"><button onclick="doAddWorkout()">Create</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function doAddWorkout() {
+  const name = document.getElementById('newWName').value.trim();
+  if (!name) return toast('Name required');
+  try {
+    await apiPost(DATA + '/templates', { name });
+    closeModal();
+    invalidatePlanTemplates();
+    loadWorkouts();
+  } catch (err) { toast(err.message); }
+}
+
+async function doDeleteWorkout(uuid, name) {
+  if (!confirm('Delete workout "' + name + '"? Scheduled days keep their entries but lose the exercise list.')) return;
+  try {
+    await api(DATA + '/templates/' + uuid, { method: 'DELETE' });
+    invalidatePlanTemplates();
+    loadWorkouts();
+  } catch (err) { toast(err.message); }
+}
+
+async function doAddTE(tplUUID) {
+  const exerciseUUID = document.getElementById('addEx-' + tplUUID).value;
+  const sets = parseInt(document.getElementById('addSets-' + tplUUID).value) || 3;
+  const reps = parseInt(document.getElementById('addReps-' + tplUUID).value) || 5;
+  const wKg = parseWeightInput(document.getElementById('addW-' + tplUUID).value);
+  try {
+    const t = (planTemplates || []).find(x => x.uuid === tplUUID);
+    const position = t ? (t.exercises || []).length : 0;
+    const teRes = await apiPost(DATA + '/template-exercises', { templateUUID: tplUUID, exerciseUUID, position, targetSets: sets, targetReps: reps });
+    if (wKg !== null) await apiPut(DATA + '/template-exercises/' + teRes.uuid, { target_weight_kg: wKg });
+    invalidatePlanTemplates();
+    loadWorkouts();
+  } catch (err) { toast(err.message); }
+}
+
+async function saveTE(teUUID, field, value) {
+  const n = parseInt(value);
+  if (isNaN(n) || n < 1) return;
+  try { await apiPut(DATA + '/template-exercises/' + teUUID, { [field]: n }); invalidatePlanTemplates(); }
+  catch (err) { toast(err.message); }
+}
+
+async function saveTEWeight(teUUID, value) {
+  const kg = parseWeightInput(value);
+  if (kg === null) return;
+  try { await apiPut(DATA + '/template-exercises/' + teUUID, { target_weight_kg: kg }); invalidatePlanTemplates(); }
+  catch (err) { toast(err.message); }
+}
+
+async function doDeleteTE(teUUID) {
+  try {
+    await api(DATA + '/template-exercises/' + teUUID, { method: 'DELETE' });
+    invalidatePlanTemplates();
+    loadWorkouts();
+  } catch (err) { toast(err.message); }
 }
 
 // ── Sagas ──
@@ -1357,8 +1669,19 @@ function showEditSaga(uuid, name, desc, startDate, currentChapter) {
     '<div class="row"><input id="edSName" placeholder="Saga name" value="' + e(name) + '" style="flex:1"></div>' +
     '<div class="row"><input id="edSDesc" placeholder="Description" value="' + e(desc) + '" style="flex:1"></div>' +
     '<div class="row"><input id="edSDate" type="date" value="' + e(startDate) + '"> <span class="msg" style="font-size:11px">Start date puts this saga on the calendar</span></div>' +
-    '<div class="row" style="margin-top:12px"><button onclick="doSaveSaga(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button></div>';
+    '<div class="row" style="margin-top:12px"><button onclick="doSaveSaga(' + jsArg(uuid) + ')">Save</button><button class="secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="danger" style="margin-left:auto" onclick="doDeleteSaga(' + jsArg(uuid) + ',' + jsArg(name) + ')">Delete</button></div>';
   document.getElementById('modal').style.display = 'flex';
+}
+
+async function doDeleteSaga(uuid, name) {
+  if (!confirm('Delete "' + name + '" and all of its chapters and planned workouts?')) return;
+  try {
+    await api(DATA + '/sagas/' + uuid, { method: 'DELETE' });
+    closeModal();
+    toast('Deleted');
+    loadSagas();
+  } catch (err) { toast(err.message); }
 }
 
 async function doSaveSaga(uuid) {

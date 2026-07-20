@@ -330,20 +330,22 @@ export default function dataRoutes(db) {
     res.json({ ok: true });
   });
 
-  router.post('/data/sessions', auth, (req, res) => {
-    const { villainUUID, durationMinutes, sessionType, sagaUUID, chapterUUID, scheduleRuleUUID, plannedWorkoutUUID, scheduledDate } = req.body;
-    if (!villainUUID || typeof durationMinutes !== 'number') return res.status(400).json({ error: 'villainUUID and durationMinutes required' });
+  // Shared by /data/sessions and /data/quicklog: runs the FULL combat path (featured damage,
+  // XP events, defeat checks, 3-day constant-heavy chain) and writes the session row.
+  // Returns { status, error } on failure or { sessionUuid, villain, changesApplied } on success.
+  function performSession(puid, body) {
+    const { villainUUID, durationMinutes, sessionType, sagaUUID, chapterUUID, scheduleRuleUUID, plannedWorkoutUUID, scheduledDate } = body;
+    if (!villainUUID || typeof durationMinutes !== 'number') return { status: 400, error: 'villainUUID and durationMinutes required' };
 
-    const puid = req.profileUuid;
     ensureConstants(db, puid);
     const villain = db.prepare('SELECT * FROM villains WHERE uuid = ? AND profile_uuid = ?').get(villainUUID, puid);
-    if (!villain) return res.status(404).json({ error: 'villain not found' });
+    if (!villain) return { status: 404, error: 'villain not found' };
     // The Drought (constant_minion) is weakened only by hydration (POST /data/water). A training
     // session must never damage it — enforce the water-only invariant server-side, not just in the UI.
-    if (villain.slot === 'constant_minion') return res.status(400).json({ error: 'This foe is weakened only by water.' });
+    if (villain.slot === 'constant_minion') return { status: 400, error: 'This foe is weakened only by water.' };
 
     const type = sessionType || combat.classification(durationMinutes);
-    if (!['fullScheduled', 'shortSession', 'mobilityRecovery'].includes(type)) return res.status(400).json({ error: 'invalid sessionType' });
+    if (!['fullScheduled', 'shortSession', 'mobilityRecovery'].includes(type)) return { status: 400, error: 'invalid sessionType' };
 
     const nowMs = Date.now();
     const now = Math.floor(nowMs / 1000); // domain values in SECONDS; HLC wall clock stays ms
@@ -413,7 +415,83 @@ export default function dataRoutes(db) {
     }
 
     applyConsoleChanges(db, puid, changes);
-    res.status(201).json({ sessionUuid, villain });
+    return { sessionUuid, villain };
+  }
+
+  router.post('/data/sessions', auth, (req, res) => {
+    const result = performSession(req.profileUuid, req.body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    res.status(201).json({ sessionUuid: result.sessionUuid, villain: result.villain });
+  });
+
+  // Quick-log (spec v2.58): one call logs a whole workout — session (full combat) + per-set
+  // set_logs — and returns per-exercise progression verdicts. The server only SUGGESTS;
+  // the client asks the owner and applies weight changes via PUT /data/template-exercises.
+  router.post('/data/quicklog', auth, (req, res) => {
+    const { entries } = req.body;
+    if (!Array.isArray(entries) || entries.length === 0) return res.status(400).json({ error: 'entries required' });
+
+    const puid = req.profileUuid;
+
+    // Consecutive-fail lookback must NOT include the session being logged — read history first.
+    const priorFails = {};
+    for (const entry of entries) {
+      if (!entry.exerciseUUID) continue;
+      const rows = db.prepare(
+        `SELECT s.uuid as session_uuid, MIN(sl.completed) as all_completed
+         FROM set_logs sl JOIN sessions s ON s.uuid = sl.session_uuid AND s.profile_uuid = sl.profile_uuid
+         WHERE sl.profile_uuid = ? AND sl.exercise_uuid = ?
+         GROUP BY s.uuid ORDER BY s.date DESC LIMIT 2`
+      ).all(puid, entry.exerciseUUID);
+      priorFails[entry.exerciseUUID] = rows.length === 2 && rows.every(r => r.all_completed === 0);
+    }
+
+    const result = performSession(puid, req.body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+
+    const nowMs = Date.now();
+    const now = Math.floor(nowMs / 1000);
+    const changes = [];
+    const suggestions = [];
+    const FIVE_LB_KG = 2.26796185;
+
+    for (const entry of entries) {
+      const targetSets = Math.max(1, entry.targetSets || 1);
+      const completedSets = Math.min(targetSets, Math.max(0, entry.completedSets ?? 0));
+      const failed = entry.failed === true || completedSets < targetSets;
+      for (let i = 0; i < targetSets; i++) {
+        const slUuid = randomUUID();
+        const hlc = tickConsoleClock(db, nowMs);
+        changes.push({
+          table: 'set_logs', uuid: slUuid, field: '__row__',
+          value: {
+            uuid: slUuid, session_uuid: result.sessionUuid, exercise_uuid: entry.exerciseUUID,
+            set_index: i, reps: entry.targetReps ?? 0, weight_kg: entry.weightKg ?? 0,
+            rpe: null, completed: i < completedSets ? 1 : 0,
+            duration_sec: null, distance_m: null, timestamp: now, replaces_uuid: null,
+          },
+          hlc, deviceId: CONSOLE_DEVICE_ID,
+        });
+      }
+      if (!failed && entry.weightKg > 0) {
+        suggestions.push({
+          exerciseUUID: entry.exerciseUUID,
+          templateExerciseUUID: entry.templateExerciseUUID ?? null,
+          suggest: 'increase',
+          nextWeightKg: entry.weightKg + FIVE_LB_KG,
+        });
+      } else if (failed && priorFails[entry.exerciseUUID] && entry.weightKg > 0) {
+        suggestions.push({
+          exerciseUUID: entry.exerciseUUID,
+          templateExerciseUUID: entry.templateExerciseUUID ?? null,
+          suggest: 'deload',
+          nextWeightKg: entry.weightKg * 0.85,
+        });
+      }
+    }
+
+    applyConsoleChanges(db, puid, changes);
+    res.status(201).json({ sessionUuid: result.sessionUuid, suggestions });
   });
 
   router.post('/data/water', auth, (req, res) => {
@@ -638,6 +716,90 @@ export default function dataRoutes(db) {
     res.status(201).json({ uuid });
   });
 
+  // ── Rotation schedules (spec v2.58): materialized one-off rules sharing a schedule_group ──
+
+  const dateKeyFrom = (y, m, d) => {
+    const dt = new Date(y, m - 1, d);
+    return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+  };
+
+  router.post('/data/schedules', auth, (req, res) => {
+    const { startDate, pattern, assignments, weeks, name } = req.body;
+    if (!startDate || !Array.isArray(pattern) || pattern.length === 0) {
+      return res.status(400).json({ error: 'startDate and pattern required' });
+    }
+    const horizonWeeks = Math.min(26, Math.max(1, parseInt(weeks) || 8));
+    const puid = req.profileUuid;
+
+    const slots = pattern.map(s => String(s).trim());
+    const letters = [...new Set(slots.filter(s => s.toLowerCase() !== 'rest'))];
+    if (letters.length === 0) return res.status(400).json({ error: 'pattern needs at least one workout slot' });
+
+    // Resolve each letter's template up front so every generated rule gets a real name
+    const tplByLetter = {};
+    for (const letter of letters) {
+      const tplUUID = assignments ? assignments[letter] : null;
+      if (tplUUID) {
+        const tpl = db.prepare('SELECT uuid, name FROM workout_templates WHERE uuid = ? AND profile_uuid = ? AND deleted = 0').get(tplUUID, puid);
+        if (!tpl) return res.status(400).json({ error: 'unknown template for slot ' + letter });
+        tplByLetter[letter] = tpl;
+      }
+    }
+
+    const [sy, sm, sd] = String(startDate).split('-').map(Number);
+    if (!sy || !sm || !sd) return res.status(400).json({ error: 'startDate must be yyyy-mm-dd' });
+
+    const group = randomUUID();
+    const nowMs = Date.now();
+    const changes = [];
+    let created = 0;
+    for (let offset = 0; offset < horizonWeeks * 7; offset++) {
+      const slot = slots[offset % slots.length];
+      if (slot.toLowerCase() === 'rest') continue;
+      const tpl = tplByLetter[slot];
+      const uuid = randomUUID();
+      const hlc = tickConsoleClock(db, nowMs);
+      changes.push(
+        { table: 'schedule_rules', uuid, field: 'name', value: tpl ? tpl.name : slot, hlc, deviceId: CONSOLE_DEVICE_ID },
+        { table: 'schedule_rules', uuid, field: 'start_date', value: dateKeyFrom(sy, sm, sd + offset), hlc, deviceId: CONSOLE_DEVICE_ID },
+        { table: 'schedule_rules', uuid, field: 'recurrence', value: 'once', hlc, deviceId: CONSOLE_DEVICE_ID },
+        { table: 'schedule_rules', uuid, field: 'schedule_group', value: group, hlc, deviceId: CONSOLE_DEVICE_ID },
+      );
+      if (tpl) changes.push({ table: 'schedule_rules', uuid, field: 'template_uuid', value: tpl.uuid, hlc, deviceId: CONSOLE_DEVICE_ID });
+      if (name) changes.push({ table: 'schedule_rules', uuid, field: 'notes', value: name, hlc, deviceId: CONSOLE_DEVICE_ID });
+      created++;
+    }
+    applyConsoleChanges(db, puid, changes);
+    res.status(201).json({ group, created });
+  });
+
+  router.get('/data/schedules', auth, (req, res) => {
+    const puid = req.profileUuid;
+    const rows = db.prepare(
+      `SELECT schedule_group as grp, MIN(start_date) as firstDate, MAX(start_date) as lastDate,
+              COUNT(*) as remaining, MAX(notes) as name
+       FROM schedule_rules
+       WHERE profile_uuid = ? AND deleted = 0 AND schedule_group IS NOT NULL
+       GROUP BY schedule_group ORDER BY firstDate`
+    ).all(puid);
+    res.json({ schedules: rows.map(r => ({ group: r.grp, name: r.name, firstDate: r.firstDate, lastDate: r.lastDate, remaining: r.remaining })) });
+  });
+
+  router.delete('/data/schedules/:group', auth, (req, res) => {
+    const puid = req.profileUuid;
+    const rules = db.prepare(
+      'SELECT uuid FROM schedule_rules WHERE profile_uuid = ? AND schedule_group = ? AND deleted = 0'
+    ).all(puid, req.params.group);
+    if (rules.length === 0) return res.status(404).json({ error: 'not found' });
+    const nowMs = Date.now();
+    const changes = rules.map(r => {
+      const hlc = tickConsoleClock(db, nowMs);
+      return { table: 'schedule_rules', uuid: r.uuid, field: 'deleted', value: true, hlc, deviceId: CONSOLE_DEVICE_ID };
+    });
+    applyConsoleChanges(db, puid, changes);
+    res.json({ ok: true, deleted: rules.length });
+  });
+
   router.post('/data/exercises', auth, (req, res) => {
     const { name, trackingType, equipment } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
@@ -859,20 +1021,62 @@ export default function dataRoutes(db) {
 
   router.delete('/data/schedule-rules/:uuid', auth, (req, res) => {
     const puid = req.profileUuid;
-    const sr = db.prepare('SELECT uuid FROM schedule_rules WHERE uuid = ? AND profile_uuid = ?').get(req.params.uuid, puid);
+    const sr = db.prepare('SELECT uuid, schedule_group FROM schedule_rules WHERE uuid = ? AND profile_uuid = ?').get(req.params.uuid, puid);
     if (!sr) return res.status(404).json({ error: 'not found' });
     const nowMs = Date.now();
+    const changes = [];
     const hlc = tickConsoleClock(db, nowMs);
-    applyConsoleChanges(db, puid, [
-      { table: 'schedule_rules', uuid: req.params.uuid, field: 'deleted', value: true, hlc, deviceId: CONSOLE_DEVICE_ID },
-    ]);
-    res.json({ ok: true });
+    changes.push({ table: 'schedule_rules', uuid: req.params.uuid, field: 'deleted', value: true, hlc, deviceId: CONSOLE_DEVICE_ID });
+
+    // ?shift=1 (spec v2.58): keep the rotation unbroken — every later workout in the group
+    // moves onto its predecessor's date, and the final date is dropped.
+    if (req.query.shift === '1' && sr.schedule_group) {
+      const group = db.prepare(
+        'SELECT uuid, start_date FROM schedule_rules WHERE profile_uuid = ? AND schedule_group = ? AND deleted = 0 ORDER BY start_date'
+      ).all(puid, sr.schedule_group);
+      const idx = group.findIndex(r => r.uuid === sr.uuid);
+      if (idx >= 0) {
+        for (let j = idx + 1; j < group.length; j++) {
+          const shiftHlc = tickConsoleClock(db, nowMs);
+          changes.push({
+            table: 'schedule_rules', uuid: group[j].uuid, field: 'start_date',
+            value: group[j - 1].start_date, hlc: shiftHlc, deviceId: CONSOLE_DEVICE_ID,
+          });
+        }
+      }
+    }
+    applyConsoleChanges(db, puid, changes);
+    res.json({ ok: true, shifted: req.query.shift === '1' && !!sr.schedule_group });
+  });
+
+  // Cascade delete a saga (owner: web had no way to delete programs): tombstones the saga,
+  // its chapters, and their planned workouts.
+  router.delete('/data/sagas/:uuid', auth, (req, res) => {
+    const puid = req.profileUuid;
+    const saga = db.prepare('SELECT uuid FROM sagas WHERE uuid = ? AND profile_uuid = ? AND deleted = 0').get(req.params.uuid, puid);
+    if (!saga) return res.status(404).json({ error: 'not found' });
+    const nowMs = Date.now();
+    const changes = [];
+    const push = (table, uuid) => {
+      const hlc = tickConsoleClock(db, nowMs);
+      changes.push({ table, uuid, field: 'deleted', value: true, hlc, deviceId: CONSOLE_DEVICE_ID });
+    };
+    push('sagas', saga.uuid);
+    const chapters = db.prepare('SELECT uuid FROM chapters WHERE profile_uuid = ? AND saga_uuid = ? AND deleted = 0').all(puid, saga.uuid);
+    for (const ch of chapters) {
+      push('chapters', ch.uuid);
+      for (const pw of db.prepare('SELECT uuid FROM planned_workouts WHERE profile_uuid = ? AND chapter_uuid = ? AND deleted = 0').all(puid, ch.uuid)) {
+        push('planned_workouts', pw.uuid);
+      }
+    }
+    applyConsoleChanges(db, puid, changes);
+    res.json({ ok: true, deleted: changes.length });
   });
 
   // ── Version ──
 
   router.get('/data/version', (_req, res) => {
-    res.json({ version: '2.70.1' });
+    res.json({ version: '2.71.0' });
   });
 
   return router;

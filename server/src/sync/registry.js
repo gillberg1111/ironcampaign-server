@@ -68,8 +68,8 @@ export const REGISTRY = {
   },
   schedule_rules: {
     appendOnly: false,
-    columns: ['uuid', 'name', 'template_uuid', 'planned_workout_uuid', 'start_date', 'recurrence', 'interval_days', 'weekday_mask', 'end_date', 'notes', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
-    mutableFields: ['name', 'template_uuid', 'planned_workout_uuid', 'start_date', 'recurrence', 'interval_days', 'weekday_mask', 'end_date', 'notes'],
+    columns: ['uuid', 'name', 'template_uuid', 'planned_workout_uuid', 'start_date', 'recurrence', 'interval_days', 'weekday_mask', 'end_date', 'notes', 'schedule_group', 'created_at', 'updated_at', 'deleted', 'profile_uuid'],
+    mutableFields: ['name', 'template_uuid', 'planned_workout_uuid', 'start_date', 'recurrence', 'interval_days', 'weekday_mask', 'end_date', 'notes', 'schedule_group'],
   },
 };
 
