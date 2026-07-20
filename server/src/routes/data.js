@@ -1076,7 +1076,7 @@ export default function dataRoutes(db) {
   // ── Version ──
 
   router.get('/data/version', (_req, res) => {
-    res.json({ version: '2.73.0' });
+    res.json({ version: '2.74.0' });
   });
 
   return router;
