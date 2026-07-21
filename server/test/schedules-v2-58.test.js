@@ -207,3 +207,88 @@ describe('Spec v2.58: quicklog + progression', () => {
     } finally { srv.close(); }
   });
 });
+
+describe('Spec v2.58: quicklog input bounds (v2.74.1 hardening)', () => {
+  async function withApp(fn) {
+    const { app, db } = makeApp();
+    const token = addDevice(db, 'p1');
+    const srv = app.listen(0);
+    try {
+      const base = `http://localhost:${srv.address().port}/api/v1`;
+      const ov = await (await fetch(base + '/data/overview', { headers: authHeader(token) })).json();
+      const heavy = ov.villains.find(v => v.slot === 'constant_heavy');
+      await fn({ base, token, db, heavy });
+    } finally { srv.close(); }
+  }
+
+  const entry = (over = {}) => ({
+    exerciseUUID: 'ex-1', templateExerciseUUID: 'te-1',
+    targetSets: 3, targetReps: 5, weightKg: 60, completedSets: 3, ...over,
+  });
+
+  it('rejects an absurd targetSets instead of inserting a row per set', async () => {
+    await withApp(async ({ base, token, db, heavy }) => {
+      const r = await post(base, '/data/quicklog', token, {
+        villainUUID: heavy.uuid, durationMinutes: 45,
+        entries: [entry({ targetSets: 200000, completedSets: 0 })],
+      });
+      assert.equal(r.status, 400, 'unbounded targetSets must be refused');
+      const rows = db.prepare("SELECT COUNT(*) c FROM set_logs WHERE profile_uuid = 'p1'").get().c;
+      assert.equal(rows, 0, 'no set_logs written for a rejected request');
+    });
+  });
+
+  it('rejects non-integer / out-of-range set and rep counts', async () => {
+    await withApp(async ({ base, token, heavy }) => {
+      const bad = [
+        entry({ targetSets: 0 }), entry({ targetSets: 2.5 }), entry({ targetSets: 101 }),
+        entry({ targetReps: -1 }), entry({ targetReps: 1001 }),
+        entry({ completedSets: 4 }),           // > targetSets
+        // Infinity/NaN can't survive JSON (both serialize to null, which is a VALID
+        // "bodyweight, no load" value) — a non-numeric weight is the reachable bad case.
+        entry({ weightKg: 'heavy' }),
+      ];
+      for (const e of bad) {
+        const r = await post(base, '/data/quicklog', token, {
+          villainUUID: heavy.uuid, durationMinutes: 45, entries: [e],
+        });
+        assert.equal(r.status, 400, `expected 400 for ${JSON.stringify(e)}`);
+      }
+    });
+  });
+
+  it('rejects more entries than a real workout holds', async () => {
+    await withApp(async ({ base, token, heavy }) => {
+      const r = await post(base, '/data/quicklog', token, {
+        villainUUID: heavy.uuid, durationMinutes: 45,
+        entries: Array.from({ length: 51 }, () => entry()),
+      });
+      assert.equal(r.status, 400);
+    });
+  });
+
+  it('rejects NaN/Infinity durationMinutes that typeof-number let through', async () => {
+    await withApp(async ({ base, token, heavy }) => {
+      // JSON has no NaN literal; a client sending one serializes null, and Infinity -> null too.
+      // The finite-range guard also covers absurd-but-valid numbers.
+      for (const d of [null, -5, 5000]) {
+        const r = await post(base, '/data/quicklog', token, {
+          villainUUID: heavy.uuid, durationMinutes: d, entries: [entry()],
+        });
+        assert.equal(r.status, 400, `expected 400 for durationMinutes=${d}`);
+      }
+    });
+  });
+
+  it('still accepts a normal workout', async () => {
+    await withApp(async ({ base, token, db, heavy }) => {
+      const r = await post(base, '/data/quicklog', token, {
+        villainUUID: heavy.uuid, durationMinutes: 45,
+        entries: [entry({ targetSets: 3, completedSets: 2 })],
+      });
+      assert.equal(r.status, 201);
+      const rows = db.prepare("SELECT completed FROM set_logs WHERE profile_uuid = 'p1' ORDER BY set_index").all();
+      assert.deepEqual(rows.map(x => x.completed), [1, 1, 0]);
+    });
+  });
+});

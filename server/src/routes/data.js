@@ -335,7 +335,11 @@ export default function dataRoutes(db) {
   // Returns { status, error } on failure or { sessionUuid, villain, changesApplied } on success.
   function performSession(puid, body) {
     const { villainUUID, durationMinutes, sessionType, sagaUUID, chapterUUID, scheduleRuleUUID, plannedWorkoutUUID, scheduledDate } = body;
-    if (!villainUUID || typeof durationMinutes !== 'number') return { status: 400, error: 'villainUUID and durationMinutes required' };
+    // Number.isFinite, not typeof: NaN and Infinity are both typeof 'number' and would land
+    // in the session row (and the combat classifier) as garbage.
+    if (!villainUUID || !Number.isFinite(durationMinutes) || durationMinutes < 0 || durationMinutes > 1440) {
+      return { status: 400, error: 'villainUUID and a durationMinutes of 0-1440 required' };
+    }
 
     ensureConstants(db, puid);
     const villain = db.prepare('SELECT * FROM villains WHERE uuid = ? AND profile_uuid = ?').get(villainUUID, puid);
@@ -427,9 +431,51 @@ export default function dataRoutes(db) {
   // Quick-log (spec v2.58): one call logs a whole workout — session (full combat) + per-set
   // set_logs — and returns per-exercise progression verdicts. The server only SUGGESTS;
   // the client asks the owner and applies weight changes via PUT /data/template-exercises.
+  // Bounds mirror what a real workout can hold. Without them a single authenticated request
+  // with targetSets: 200000 inserts 200k set_logs in ~2s (measured) — reject rather than
+  // silently clamp, since truncating would quietly record something the owner didn't do.
+  const QUICKLOG_MAX_ENTRIES = 50;
+  const QUICKLOG_MAX_SETS = 100;
+  const QUICKLOG_MAX_REPS = 1000;
+
+  // A template holding target_sets: 999999 renders one tap-chip per set on the phone and
+  // watch — the UI hangs long before anything reaches /data/quicklog. Bound the stored
+  // template too, using the same ceilings.
+  function invalidTemplateTarget(body) {
+    for (const [field, lo, hi] of [['target_sets', 1, QUICKLOG_MAX_SETS], ['target_reps', 0, QUICKLOG_MAX_REPS]]) {
+      const v = body[field];
+      if (v === undefined || v === null) continue;
+      if (!Number.isInteger(v) || v < lo || v > hi) return `${field} must be an integer ${lo}-${hi}`;
+    }
+    if (body.target_weight_kg != null && !Number.isFinite(body.target_weight_kg)) {
+      return 'target_weight_kg must be a finite number';
+    }
+    return null;
+  }
+
   router.post('/data/quicklog', auth, (req, res) => {
     const { entries } = req.body;
     if (!Array.isArray(entries) || entries.length === 0) return res.status(400).json({ error: 'entries required' });
+    if (entries.length > QUICKLOG_MAX_ENTRIES) {
+      return res.status(400).json({ error: `at most ${QUICKLOG_MAX_ENTRIES} entries` });
+    }
+    for (const entry of entries) {
+      const sets = entry.targetSets ?? 1;
+      const reps = entry.targetReps ?? 0;
+      const done = entry.completedSets ?? 0;
+      if (!Number.isInteger(sets) || sets < 1 || sets > QUICKLOG_MAX_SETS) {
+        return res.status(400).json({ error: `targetSets must be an integer 1-${QUICKLOG_MAX_SETS}` });
+      }
+      if (!Number.isInteger(reps) || reps < 0 || reps > QUICKLOG_MAX_REPS) {
+        return res.status(400).json({ error: `targetReps must be an integer 0-${QUICKLOG_MAX_REPS}` });
+      }
+      if (!Number.isInteger(done) || done < 0 || done > sets) {
+        return res.status(400).json({ error: 'completedSets must be an integer 0-targetSets' });
+      }
+      if (entry.weightKg != null && !Number.isFinite(entry.weightKg)) {
+        return res.status(400).json({ error: 'weightKg must be a finite number' });
+      }
+    }
 
     const puid = req.profileUuid;
 
@@ -883,6 +929,8 @@ export default function dataRoutes(db) {
   router.post('/data/template-exercises', auth, (req, res) => {
     const { templateUUID, exerciseUUID, name, position, targetSets, targetReps } = req.body;
     if (!templateUUID) return res.status(400).json({ error: 'templateUUID required' });
+    const invalidNew = invalidTemplateTarget({ target_sets: targetSets, target_reps: targetReps });
+    if (invalidNew) return res.status(400).json({ error: invalidNew });
     if (!exerciseUUID && !name) return res.status(400).json({ error: 'exerciseUUID or name required' });
     const puid = req.profileUuid;
     const uuid = randomUUID();
@@ -904,6 +952,8 @@ export default function dataRoutes(db) {
     const puid = req.profileUuid;
     const te = db.prepare('SELECT uuid FROM template_exercises WHERE uuid = ? AND profile_uuid = ?').get(req.params.uuid, puid);
     if (!te) return res.status(404).json({ error: 'not found' });
+    const invalid = invalidTemplateTarget(req.body);
+    if (invalid) return res.status(400).json({ error: invalid });
     const nowMs = Date.now();
     const hlc = tickConsoleClock(db, nowMs);
     const changes = [];
@@ -1076,7 +1126,7 @@ export default function dataRoutes(db) {
   // ── Version ──
 
   router.get('/data/version', (_req, res) => {
-    res.json({ version: '2.74.0' });
+    res.json({ version: '2.74.1' });
   });
 
   return router;

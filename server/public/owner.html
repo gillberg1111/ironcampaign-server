@@ -1412,7 +1412,7 @@ async function showQuickLog(templateUUID, ruleUUID, pwUUID, dateKey) {
   quickLogCtx = { templateUUID, ruleUUID, pwUUID, dateKey };
   let html = '<h3>' + e(t.name) + '</h3>';
   for (const te of (t.exercises || [])) {
-    const sets = Math.max(1, te.target_sets || 3);
+    const sets = Math.min(MAX_SETS, Math.max(1, te.target_sets || 3)); // one chip per set
     html += '<div class="ql-ex" data-te="' + e(te.uuid) + '" data-ex="' + e(te.exercise_uuid) + '" data-w="' + (te.target_weight_kg ?? 0) + '" data-sets="' + sets + '" data-reps="' + (te.target_reps ?? 0) + '">';
     html += '<div class="row sb"><span>' + e(exerciseName(te.exercise_uuid)) + '</span><span class="msg" style="font-size:12px">'
       + sets + ' × ' + (te.target_reps ?? '—') + (te.target_weight_kg ? ' @ ' + displayWeight(te.target_weight_kg) : '') + '</span></div>';
@@ -1510,16 +1510,16 @@ async function loadWorkouts() {
       html += '<table><tbody>';
       for (const te of (t.exercises || [])) {
         html += '<tr><td>' + e(exerciseName(te.exercise_uuid)) + '</td>';
-        html += '<td style="white-space:nowrap"><input type="number" min="1" value="' + (te.target_sets ?? '') + '" style="width:52px" onchange="saveTE(' + jsArg(te.uuid) + ',\'target_sets\',this.value)"> sets</td>';
-        html += '<td style="white-space:nowrap"><input type="number" min="1" value="' + (te.target_reps ?? '') + '" style="width:52px" onchange="saveTE(' + jsArg(te.uuid) + ',\'target_reps\',this.value)"> reps</td>';
+        html += '<td style="white-space:nowrap"><input type="number" min="1" max="100" value="' + (te.target_sets ?? '') + '" style="width:52px" onchange="saveTE(' + jsArg(te.uuid) + ',\'target_sets\',this.value)"> sets</td>';
+        html += '<td style="white-space:nowrap"><input type="number" min="0" max="1000" value="' + (te.target_reps ?? '') + '" style="width:52px" onchange="saveTE(' + jsArg(te.uuid) + ',\'target_reps\',this.value)"> reps</td>';
         html += '<td style="white-space:nowrap"><input type="number" min="0" step="' + (weightUnitSetting === 'lbs' ? '2.5' : '1.25') + '" value="' + inputWeightValue(te.target_weight_kg) + '" style="width:70px" onchange="saveTEWeight(' + jsArg(te.uuid) + ',this.value)"> ' + unitLabel() + '</td>';
         html += '<td><button class="small danger" onclick="doDeleteTE(' + jsArg(te.uuid) + ')">Del</button></td></tr>';
       }
       html += '</tbody></table>';
       html += '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">';
       html += '<select id="addEx-' + t.uuid + '">' + (planExercises || []).map(x => '<option value="' + e(x.uuid) + '">' + e(x.name) + '</option>').join('') + '</select>';
-      html += '<input type="number" min="1" value="3" id="addSets-' + t.uuid + '" style="width:52px" title="Sets"> sets';
-      html += '<input type="number" min="1" value="5" id="addReps-' + t.uuid + '" style="width:52px" title="Reps"> reps';
+      html += '<input type="number" min="1" max="100" value="3" id="addSets-' + t.uuid + '" style="width:52px" title="Sets"> sets';
+      html += '<input type="number" min="1" max="1000" value="5" id="addReps-' + t.uuid + '" style="width:52px" title="Reps"> reps';
       html += '<input type="number" min="0" step="' + (weightUnitSetting === 'lbs' ? '2.5' : '1.25') + '" id="addW-' + t.uuid + '" style="width:70px" placeholder="weight"> ' + unitLabel();
       html += '<button class="small" onclick="doAddTE(' + jsArg(t.uuid) + ')">+ Add Exercise</button>';
       html += '</div></div>';
@@ -1571,9 +1571,15 @@ async function doAddTE(tplUUID) {
   } catch (err) { toast(err.message); }
 }
 
+// Ceilings match the server's /data/template-exercises bounds and the phone/watch tap-chip
+// UI (one chip per set) — an unbounded value hangs those clients and is rejected on write.
+const MAX_SETS = 100, MAX_REPS = 1000;
 async function saveTE(teUUID, field, value) {
   const n = parseInt(value);
-  if (isNaN(n) || n < 1) return;
+  const max = field === 'target_reps' ? MAX_REPS : MAX_SETS;
+  const min = field === 'target_reps' ? 0 : 1;
+  if (isNaN(n) || n < min) return;
+  if (n > max) { toast(`Max ${max}`); return; }
   try { await apiPut(DATA + '/template-exercises/' + teUUID, { [field]: n }); invalidatePlanTemplates(); }
   catch (err) { toast(err.message); }
 }
