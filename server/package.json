@@ -1,7 +1,7 @@
 {
   "name": "ironcampaign-sync",
   "type": "module",
-  "version": "2.76.3",
+  "version": "2.76.4",
   "private": true,
   "description": "IronCampaign sync node — training field guide backend",
   "main": "src/app.js",

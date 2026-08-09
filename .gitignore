@@ -5,3 +5,6 @@ server/data/
 *.db-wal
 *.db-shm
 *.log
+
+# Local AI handoff context (Grok Build) — never publish
+SummaryForGrok.md
