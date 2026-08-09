@@ -1,4 +1,5 @@
-const SCHEMA_VERSION = 18;
+// Must match the highest version `migrate()` records (applyV20 today). /health reports this.
+const SCHEMA_VERSION = 20;
 
 function columnExists(db, table, column) {
   const rows = db.pragma(`table_info(${table})`);
