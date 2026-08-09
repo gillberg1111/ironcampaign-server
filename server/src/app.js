@@ -31,7 +31,7 @@ export function createApp(db) {
     res.json({
       status: 'ok',
       name: 'ironcampaign-sync',
-      version: '2.76.4',
+      version: '2.76.5',
       uptime_s: Math.floor((Date.now() - startTime) / 1000),
       schema_version: SCHEMA_VERSION,
     });
