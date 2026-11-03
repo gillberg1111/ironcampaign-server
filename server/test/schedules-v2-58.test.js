@@ -20,7 +20,7 @@ describe('Spec v2.58: rotation schedules + quicklog', () => {
     const db = new Database(':memory:');
     migrate(db);
     migrate(db);
-    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 20);
+    assert.equal(db.prepare('SELECT MAX(version) as v FROM schema_version').get().v, 21);
     assert.ok(db.pragma('table_info(schedule_rules)').map(c => c.name).includes('schedule_group'));
     assert.ok(REGISTRY.schedule_rules.columns.includes('schedule_group'));
     assert.ok(REGISTRY.schedule_rules.mutableFields.includes('schedule_group'));

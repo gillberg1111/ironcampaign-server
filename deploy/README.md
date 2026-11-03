@@ -13,11 +13,13 @@
   `systemctl enable --now backup.timer`
 
 ## 3. Initial Setup & Pairing
-1. **Bootstrap the owner key** (printed ONCE — store it in a password manager):
-   `cd /opt/ironcampaign/server && node scripts/create-owner.mjs`
-2. **Open the owner console** at `https://your-domain.com/owner`, paste the owner key, and
-   create a pairing phrase (10-minute, single-use; shown as text + QR).
-3. **Pair the device**: in the app's Settings sheet, type the phrase or scan the QR — the app
+1. **Start the node.** Until it is claimed, each boot prints a setup code in the service log.
+2. **Open the owner console** at `https://your-domain.com/owner`, enter that code, and choose a
+   username and password. Or skip the code and create the account from the shell:
+   `cd /opt/ironcampaign/server && node scripts/create-owner.mjs <username> <password>`
+3. **Create a pairing phrase** (10-minute, single-use; shown as text + QR). At most three phrases
+   can be open at once.
+4. **Pair the device**: in the app's Settings sheet, type the phrase or scan the QR — the app
    redeems it via `POST /api/v1/sync/pair` and stores its device token in the Keychain.
 
 ## 4. Backups & Recovery
@@ -29,7 +31,8 @@
 - **Warning**: guard the `.db` file; it is the entire database of every profile on the node.
 
 ## 5. Key Rotation & Security
-- Rotate an owner key by re-running `node scripts/create-owner.mjs <profileUuid>` — the old key
-  stops working immediately (the console has no rotate button).
+- Reset the owner password by re-running `node scripts/create-owner.mjs <username> <password>`.
+  Console sessions expire after 30 days, and Logout revokes the current console token on the server.
+  Phone tokens stay valid until you revoke them here — the shipped app has no way to refresh one.
 - Revoke compromised device tokens via the Owner Console.
 - Caddy handles automatic TLS for the domain configured in `Caddyfile`.

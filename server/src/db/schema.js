@@ -1,5 +1,5 @@
-// Must match the highest version `migrate()` records (applyV20 today). /health reports this.
-const SCHEMA_VERSION = 20;
+// Must match the highest version `migrate()` records (applyV21 today). /health reports this.
+const SCHEMA_VERSION = 21;
 
 function columnExists(db, table, column) {
   const rows = db.pragma(`table_info(${table})`);
@@ -403,6 +403,11 @@ function migrate(db) {
       applyV20(db);
       db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(20);
     }
+
+    if (currentVersion < 21) {
+      applyV21(db);
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(21);
+    }
   }
 
 function applyV11(db) {
@@ -473,6 +478,19 @@ function applyV15(db) {
 
   function applyV20(db) {
     addColumnIfMissing(db, 'schedule_rules', 'schedule_group', 'TEXT');
+  }
+
+  function applyV21(db) {
+    addColumnIfMissing(db, 'device_tokens', 'kind', "TEXT NOT NULL DEFAULT 'device'");
+    addColumnIfMissing(db, 'device_tokens', 'expires_at', 'INTEGER');
+    // Existing console sessions keep working for 30 days, then the browser logs in again.
+    // Phone rows stay kind=device with no expiry so paired devices are not locked out.
+    const consoleExpires = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    db.prepare(
+      `UPDATE device_tokens
+       SET kind = 'console', expires_at = ?
+       WHERE device_name = 'Web console' AND expires_at IS NULL`
+    ).run(consoleExpires);
   }
 
   function applyV18(db) {

@@ -98,6 +98,14 @@ describe('Owner console page', () => {
     assert.match(html, /ic_console_token/);
   });
 
+  it('error text is assigned with textContent, and logout revokes the server token', () => {
+    const html = fs.readFileSync(htmlPath, 'utf8');
+    assert.match(html, /function showError/);
+    assert.match(html, /node\.textContent = String\(message/);
+    assert.doesNotMatch(html, /innerHTML = '<(?:span|p) class="error">' \+/);
+    assert.match(html, /OWNER \+ '\/logout'/);
+  });
+
   // XSS regression (security review of v2.35): synced names AND uuids are device-controlled;
   // JS arguments inside onclick attributes must be jsArg-encoded (JSON + HTML escape), never
   // built with raw \' quote concatenation, and the escaper must cover quotes.

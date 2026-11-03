@@ -20,6 +20,34 @@ describe('trust proxy', () => {
     const app = createApp(db);
     assert.notEqual(app.get('trust proxy'), true);
   });
+
+  it('honors an explicit TRUST_PROXY list and refuses boolean trust', () => {
+    const prev = process.env.TRUST_PROXY;
+    try {
+      process.env.TRUST_PROXY = 'uniquelocal';
+      assert.equal(createApp(makeDb()).get('trust proxy'), 'uniquelocal');
+      process.env.TRUST_PROXY = 'true';
+      assert.equal(createApp(makeDb()).get('trust proxy'), 'loopback');
+      process.env.TRUST_PROXY = '10.0.0.1, 172.16.0.0/12';
+      assert.deepEqual(createApp(makeDb()).get('trust proxy'), ['10.0.0.1', '172.16.0.0/12']);
+    } finally {
+      if (prev === undefined) delete process.env.TRUST_PROXY;
+      else process.env.TRUST_PROXY = prev;
+    }
+  });
+
+  it('sends nosniff, DENY, and frame-ancestors on responses', async () => {
+    const db = makeDb();
+    const app = createApp(db);
+    const srv = app.listen(0);
+    const base = `http://localhost:${srv.address().port}`;
+    try {
+      const res = await fetch(`${base}/health`);
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+      assert.equal(res.headers.get('x-frame-options'), 'DENY');
+      assert.match(res.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
+    } finally { srv.close(); }
+  });
 });
 
 describe('request logger', () => {

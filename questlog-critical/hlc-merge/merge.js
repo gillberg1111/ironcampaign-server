@@ -84,6 +84,11 @@ export function applyBatch(store, changes) {
   return sorted.map((c) => ({ change: c, decision: applyChange(store, c) }));
 }
 
+/** Shape check shared with the sync route so one bad change can be rejected without a 500. */
+export function validateChange(c) {
+  validate(c);
+}
+
 function validate(c) {
   for (const k of ['table', 'uuid', 'field', 'hlc', 'deviceId']) {
     if (typeof c[k] !== 'string' || c[k].length === 0) throw new Error(`merge: missing/invalid ${k}`);

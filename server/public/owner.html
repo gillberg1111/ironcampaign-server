@@ -324,6 +324,8 @@ nav.tabs button.active { color:var(--oxblood); border-bottom-color:var(--oxblood
       <div class="card">
         <div class="row"><input id="claimUser" placeholder="Username" style="flex:1" autocomplete="username"></div>
         <div class="row"><input id="claimPass" type="password" placeholder="Password (min 8 chars)" style="flex:1" autocomplete="new-password"></div>
+        <div class="row"><input id="claimCode" placeholder="Setup code from the server log" style="flex:1" autocomplete="off" spellcheck="false"></div>
+        <p class="msg">An unclaimed node prints a setup code each time it boots. Leave this blank only if you created the account from the terminal.</p>
         <div class="row" style="margin-top:8px">
           <button onclick="doClaim()" style="flex:1">Create Account</button>
         </div>
@@ -555,13 +557,14 @@ async function doClaim() {
   const el = document.getElementById('claimErr');
   const username = document.getElementById('claimUser').value.trim();
   const password = document.getElementById('claimPass').value;
+  const setupCode = document.getElementById('claimCode').value.trim();
   if (!username || !password) { el.textContent = 'Username and password required.'; return; }
   if (password.length < 8) { el.textContent = 'Password must be at least 8 characters.'; return; }
   el.textContent = '';
   try {
     const r = await fetch(OWNER + '/claim', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username, password})
+      body:JSON.stringify({username, password, setupCode})
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
@@ -596,9 +599,15 @@ async function verifyToken() {
   } catch (_) { return false; }
 }
 
-function doLogout() {
+async function doLogout() {
+  const current = token;
   token = '';
   localStorage.removeItem('ic_console_token');
+  if (current) {
+    try {
+      await fetch(OWNER + '/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + current } });
+    } catch (_) { /* the browser copy is already gone */ }
+  }
   location.reload();
 }
 
@@ -758,7 +767,7 @@ async function loadMeasurements() {
     }
     html += '</tbody></table>';
     el.innerHTML = html;
-  } catch (e) { el.innerHTML = '<span class="error">' + e.message + '</span>'; }
+  } catch (e) { showError(el, e.message); }
 }
 
 // ── Templates ──
@@ -808,7 +817,7 @@ async function loadTemplates() {
     }
     html += '</tbody></table>';
     el.innerHTML = html;
-  } catch (e) { el.innerHTML = '<span class="error">' + e.message + '</span>'; }
+  } catch (e) { showError(el, e.message); }
 }
 
 // ── Helpers ──
@@ -816,6 +825,13 @@ const fmtSec = t => t ? new Date(t * 1000).toLocaleDateString() : '—';
 const fmtSecFull = t => t ? new Date(t * 1000).toLocaleString() : '—';
 const e = s => String(s).replace(/[&<>"'`]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;', '`':'&#96;' }[c]));
 const jsArg = v => e(JSON.stringify(String(v)));
+function showError(el, message) {
+  el.replaceChildren();
+  const node = document.createElement('p');
+  node.className = 'error';
+  node.textContent = String(message ?? '');
+  el.appendChild(node);
+}
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -854,7 +870,7 @@ async function loadToday() {
     const cat = await apiGet(DATA + '/catalog');
     todayCatalog = cat.catalog || [];
     renderToday(el, ov);
-  } catch (e) { el.innerHTML = '<p class="error">' + e.message + '</p>'; }
+  } catch (e) { showError(el, e.message); }
 }
 
 function renderToday(el, ov) {
@@ -1107,7 +1123,7 @@ async function renderCalendar() {
     document.getElementById('calGrid').innerHTML = html;
     document.getElementById('calDetail').style.display = 'none';
   } catch (e) {
-    document.getElementById('calGrid').innerHTML = '<p class="error">' + e.message + '</p>';
+    showError(document.getElementById('calGrid'), e.message);
   }
 }
 
@@ -1525,7 +1541,7 @@ async function loadWorkouts() {
       html += '</div></div>';
     }
     el.innerHTML = html;
-  } catch (err) { el.innerHTML = '<p class="error">' + err.message + '</p>'; }
+  } catch (err) { showError(el, err.message); }
 }
 
 function showAddWorkout() {
@@ -1643,7 +1659,7 @@ async function loadSagas() {
       html += '</div>';
     }
     el.innerHTML = html || '<p class="msg">No sagas yet.</p>';
-  } catch (e) { el.innerHTML = '<p class="error">' + e.message + '</p>'; }
+  } catch (e) { showError(el, e.message); }
 }
 
 function showAddSaga() {
@@ -1877,7 +1893,7 @@ async function renderHistory() {
       '<span>Measurements: <strong>' + (data.measurementCount || 0) + '</strong></span>' +
       '</div></div>';
   } catch (e) {
-    document.getElementById('histGrid').innerHTML = '<p class="error">' + e.message + '</p>';
+    showError(document.getElementById('histGrid'), e.message);
   }
 }
 
@@ -1915,7 +1931,7 @@ async function loadRoster() {
       }
     }
     el.innerHTML = html || '<p class="msg">No catalog entries.</p>';
-  } catch (e) { el.innerHTML = '<p class="error">' + e.message + '</p>'; }
+  } catch (e) { showError(el, e.message); }
 }
 
 async function doToggleFoe(uuid, enabled) {

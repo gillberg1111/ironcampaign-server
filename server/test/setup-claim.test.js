@@ -241,6 +241,7 @@ describe('Setup & claim', () => {
         const { status } = await postJson(`${base}/api/v1/sync/pairings`, {}, h);
         if (i < 10) {
           assert.equal(status, 200, `attempt ${i + 1} should succeed`);
+          db.prepare('DELETE FROM pairings').run();
         } else {
           assert.equal(status, 429, 'attempt 11 should be rate limited');
         }

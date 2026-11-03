@@ -6,7 +6,22 @@
 import { randomUUID } from 'node:crypto';
 
 const MAX_COUNTER = 0xffff;
-const MAX_DRIFT_MS = 60_000; // refuse remote clocks >60s ahead of us (corruption guard)
+export const MAX_DRIFT_MS = 60_000; // refuse remote clocks >60s ahead of us (corruption guard)
+
+/**
+ * Push-path drift guard. Same bound as {@link HLC.receive}, compared to wall clock only
+ * (the server does not keep a per-device HLC for inbound batches).
+ * @param {string} hlc
+ * @param {number} [now]
+ */
+export function assertAcceptableDrift(hlc, now = Date.now()) {
+  const { ms } = unpack(hlc);
+  if (ms > now + MAX_DRIFT_MS) {
+    const err = new Error('hlc: remote clock too far ahead; refusing');
+    err.status = 400;
+    throw err;
+  }
+}
 
 /** @param {number} ms @param {number} counter @returns {string} */
 export function pack(ms, counter) {
