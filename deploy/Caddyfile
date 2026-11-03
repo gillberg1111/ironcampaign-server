@@ -9,6 +9,13 @@
 your-domain.com {
     encode gzip
 
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Content-Security-Policy "frame-ancestors 'none'"
+        Referrer-Policy no-referrer
+    }
+
     rate_limit {
         # Strict on pairing: brute-force/scanning protection for phrases.
         zone pair {

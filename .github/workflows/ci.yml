@@ -20,5 +20,9 @@ jobs:
           fi
       - name: ShellCheck backup script
         run: sudo apt-get install -y shellcheck && shellcheck deploy/backup.sh
+      - name: npm audit
+        run: |
+          npm audit --omit=dev --audit-level=high
+          cd server && npm audit --omit=dev --audit-level=high
       - name: Tests
         run: cd server && npm test

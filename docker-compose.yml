@@ -3,12 +3,18 @@ services:
     build: .
     container_name: ironcampaign
     ports:
-      - "3000:3000"           # LAN demo: http://<host-lan-ip>:3000 — put Caddy/TLS in front for internet exposure
+      # Localhost only, so a fresh node cannot be claimed from the LAN. For a TLS-less
+      # LAN demo use "3000:3000" and set TRUST_PROXY=loopback (uniquelocal plus a public
+      # bind lets clients spoof X-Forwarded-For).
+      - "127.0.0.1:3000:3000"
     volumes:
       - ironcampaign-data:/data
     environment:
       DB_PATH: /data/ironcampaign.db
       PORT: 3000
+      # Host Caddy reaches the container through the Docker proxy, which is not loopback
+      # inside the container. uniquelocal is safe only while the port stays on 127.0.0.1.
+      TRUST_PROXY: uniquelocal
       # LOG_REQUESTS: "1"     # opt-in four-field request log (never logs secrets)
     restart: unless-stopped
 

@@ -75,7 +75,7 @@ describe('Append-only union', () => {
     }
   });
 
-  it('unknown column in append-only value → 400', async () => {
+  it('unknown column in append-only value is rejected without failing the batch', async () => {
     const { app, db } = makeApp();
     const srv = app.listen(0);
     const base = `http://localhost:${srv.address().port}`;
@@ -86,7 +86,11 @@ describe('Append-only union', () => {
         changes: [{ table: 'villain_events', uuid: 'e1', field: '__row__', value: { uuid: 'e1', villain_uuid: 'v1', timestamp: 1, reason: 'confession', damage: 0, xp: 5, BOGUS_COLUMN: 'nope' }, hlc: '019077fd307b0001', deviceId: 'dev-a' }],
       }, authHeader(token));
 
-      assert.equal(res.status, 400);
+      assert.equal(res.status, 200);
+      assert.equal(res.data.applied, 0);
+      assert.equal(res.data.rejected.length, 1);
+      assert.match(res.data.rejected[0].reason, /unknown column/);
+      assert.equal(db.prepare('SELECT COUNT(*) AS c FROM villain_events').get().c, 0);
     } finally {
       srv.close();
     }

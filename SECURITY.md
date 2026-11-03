@@ -11,7 +11,10 @@ developer never holds user data. Trust boundaries, strongest first:
    (88 bits), argon2id at rest, 10-minute TTL, single use.
 2. **Device → node:** 256-bit bearer tokens, SHA-256 at rest, digest-indexed lookup (no usable
    timing side channel). `profileUuid` derives ONLY from the token row — enforced by tests (IDOR
-   suites at both the sync and owner layers). Owner key: same construction, rotatable via CLI.
+   suites at both the sync and owner layers). Console tokens are a separate `kind` from phone
+   tokens, expire after 30 days, and Logout revokes them. Phone tokens do not expire; revoke them
+   in the console. Owner password: scrypt, set from the claim screen or `scripts/create-owner.mjs`.
+   An unclaimed node will not accept `/owner/claim` without the setup code printed at boot.
 3. **Node → device (pull):** identifiers bounded + SQL fully parameterized (`safeIdent` +
    placeholders); unknown columns skipped at the device store. **Accepted risk:** a *compromised
    own-node* can still write valid in-registry game data to paired devices — it cannot execute
@@ -23,15 +26,19 @@ developer never holds user data. Trust boundaries, strongest first:
   request logger emits exactly `METHOD PATH STATUS MS` and uses `req.path` (query strings never
   logged). Owner console keeps the key in-tab only.
 - Payload bounds: 1MB JSON body cap; 500-change push batch cap (413 above).
-- `trust proxy = 'loopback'` — X-Forwarded-For is honored only from the same-host proxy.
+- `trust proxy` defaults to `loopback`. `TRUST_PROXY` may name `uniquelocal`, an IP, or a CIDR.
+  `true` is ignored. Docker Compose publishes `127.0.0.1:3000` and sets `TRUST_PROXY=uniquelocal`
+  so a host Caddy is not one shared rate-limit bucket. Do not combine `uniquelocal` with a
+  public port bind.
 - No CORS middleware: the app is native; the console is same-origin.
 - Owner console: no external origins (CI-tested grep), vendored QR encoder (functionally verified
   via CoreImage decode), all dynamic HTML escaped.
 - Backups: AES-256-GCM, PBKDF2 ≥600k, header-as-AAD, no wrong-passphrase/corrupt oracle,
   fresh salt+nonce per export (tamper/oracle behavior under test). Plain exports carry an explicit
   unencrypted warning. Server-side `.db` + backup dir permissions documented in the runbook.
-- Supply chain: npm `0 vulnerabilities` at audit time; lockfiles committed; GRDB pinned
-  `exactVersion` (no floating updates); QR encoder vendored, not fetched.
+- Supply chain: `npm audit --omit=dev --audit-level=high` runs in CI; lockfiles committed.
+  Express 4 pins `qs` below the patched release, so `server/package.json` overrides `qs` to 6.17.1.
+  Dependabot opens weekly update PRs. QR encoder vendored, not fetched.
 - iOS: ATS default (plain HTTP blocked except local networking for dev); tokens in Keychain;
   HealthKit write-only (`read: []`); privacy manifest declares no collection (self-hosted rationale
   cited in CHANGELOG 2.26.0).

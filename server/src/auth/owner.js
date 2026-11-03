@@ -1,5 +1,7 @@
 import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 
+export const CONSOLE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function hashPassword(password) {
   const salt = randomBytes(16).toString('hex');
   const hash = scryptSync(password, salt, 64).toString('hex');
@@ -21,8 +23,9 @@ export function mintConsoleToken(db, profileUuid) {
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const now = Date.now();
   db.prepare(
-    'INSERT INTO device_tokens (profile_uuid, token_sha256, device_name, created_at) VALUES (?, ?, ?, ?)'
-  ).run(profileUuid, tokenHash, 'Web console', now);
+    `INSERT INTO device_tokens (profile_uuid, token_sha256, device_name, created_at, kind, expires_at)
+     VALUES (?, ?, ?, ?, 'console', ?)`
+  ).run(profileUuid, tokenHash, 'Web console', now, now + CONSOLE_TOKEN_TTL_MS);
   return token;
 }
 
@@ -31,9 +34,11 @@ export function authenticateOwner(db, authorizationHeader) {
   if (!m) { const e = new Error('unauthorized'); e.status = 401; throw e; }
   const tokenHash = createHash('sha256').update(m[1]).digest('hex');
   const row = db.prepare(
-    'SELECT id, profile_uuid FROM device_tokens WHERE token_sha256 = ? AND revoked_at IS NULL'
+    'SELECT id, profile_uuid, kind, expires_at FROM device_tokens WHERE token_sha256 = ? AND revoked_at IS NULL'
   ).get(tokenHash);
-  if (!row) { const e = new Error('unauthorized'); e.status = 401; throw e; }
+  if (!row || row.kind !== 'console' || !(row.expires_at > Date.now())) {
+    const e = new Error('unauthorized'); e.status = 401; throw e;
+  }
   db.prepare('UPDATE device_tokens SET last_seen_at = ? WHERE id = ?').run(Date.now(), row.id);
   return { profileUuid: row.profile_uuid, deviceTokenId: row.id };
 }
@@ -43,6 +48,7 @@ export function makeOwnerAuth(db) {
     try {
       const auth = authenticateOwner(db, req.headers.authorization);
       req.ownerProfileUuid = auth.profileUuid;
+      req.ownerDeviceTokenId = auth.deviceTokenId;
       next();
     } catch (e) {
       res.status(e.status || 401).json({ error: 'unauthorized' });

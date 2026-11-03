@@ -49,7 +49,8 @@ try {
       .run(profileUuid, placeholderKey, username, hashed, Date.now());
     console.log(`Admin account created for new profile ${profileUuid}.`);
   }
-  console.log('Log in at /owner with these credentials.');
+    db.prepare("DELETE FROM server_clock WHERE key = 'setup_code_sha256'").run();
+    console.log('Log in at /owner with these credentials.');
 } catch (e) {
   console.error('Failed:', e.message);
   process.exit(1);

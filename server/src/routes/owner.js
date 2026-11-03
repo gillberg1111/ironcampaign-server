@@ -1,11 +1,53 @@
 import { Router } from 'express';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { hashPassword, verifyPassword, mintConsoleToken, makeOwnerAuth } from '../auth/owner.js';
 import { createPairing, revokeDevice } from '../../../questlog-critical/sync-auth/pairing.js';
+import { slidingWindowLimit } from '../middleware/rateLimit.js';
+
+const SETUP_CODE_KEY = 'setup_code_sha256';
 
 export function isServerClaimed(db) {
   const row = db.prepare('SELECT 1 FROM owners WHERE password_hash IS NOT NULL LIMIT 1').get();
   return !!row;
+}
+
+export function clearSetupCode(db) {
+  db.prepare('DELETE FROM server_clock WHERE key = ?').run(SETUP_CODE_KEY);
+}
+
+/** While the node is unclaimed, rotate a one-time code and print it. Returns the code, or null if already claimed. */
+export function issueSetupCode(db) {
+  if (isServerClaimed(db)) return null;
+  const code = randomBytes(9).toString('base64url');
+  const hash = createHash('sha256').update(code).digest('hex');
+  db.prepare(
+    `INSERT INTO server_clock (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(SETUP_CODE_KEY, hash);
+  console.log(`IronCampaign setup code (rotates each boot until the node is claimed): ${code}`);
+  return code;
+}
+
+export function setupCodeRequired(db) {
+  return !!db.prepare('SELECT 1 FROM server_clock WHERE key = ?').get(SETUP_CODE_KEY);
+}
+
+export function assertSetupCode(db, setupCode) {
+  const row = db.prepare('SELECT value FROM server_clock WHERE key = ?').get(SETUP_CODE_KEY);
+  if (!row) return;
+  const given = typeof setupCode === 'string' ? setupCode : '';
+  const got = createHash('sha256').update(given).digest();
+  const expected = Buffer.from(String(row.value), 'hex');
+  if (got.length !== expected.length || !timingSafeEqual(got, expected)) {
+    const err = new Error('invalid setup code');
+    err.status = 403;
+    throw err;
+  }
+}
+
+function sendError(res, err) {
+  const status = err.status || 500;
+  res.status(status).json({ error: status === 500 ? 'internal error' : err.message });
 }
 
 export default function ownerRoutes(db) {
@@ -16,24 +58,15 @@ export default function ownerRoutes(db) {
   // pattern the pairing endpoints use; per-router instance so tests stay isolated).
   const loginAttempts = new Map();
   function rateLimitLogin(ip) {
-    const now = Date.now();
-    const WINDOW_MS = 15 * 60 * 1000;
-    const MAX = 10;
-    const a = loginAttempts.get(ip);
-    if (!a || now - a.windowStart > WINDOW_MS) {
-      loginAttempts.set(ip, { count: 1, windowStart: now });
-      return;
-    }
-    a.count += 1;
-    if (a.count > MAX) { const e = new Error('rate limited'); e.status = 429; throw e; }
+    slidingWindowLimit(loginAttempts, ip || 'unknown', { windowMs: 15 * 60 * 1000, max: 10 });
   }
 
   router.get('/owner/status', (_req, res) => {
-    res.json({ claimed: isServerClaimed(db) });
+    res.json({ claimed: isServerClaimed(db), setupRequired: setupCodeRequired(db) });
   });
 
   router.get('/owner/setup', (_req, res) => {
-    res.json({ claimed: isServerClaimed(db) });
+    res.json({ claimed: isServerClaimed(db), setupRequired: setupCodeRequired(db) });
   });
 
   router.post('/owner/claim', (req, res) => {
@@ -43,7 +76,8 @@ export default function ownerRoutes(db) {
         return res.status(409).json({ error: 'server already claimed' });
       }
 
-      const { username, password } = req.body || {};
+      const { username, password, setupCode } = req.body || {};
+      assertSetupCode(db, setupCode);
       if (typeof username !== 'string' || !username.trim() || typeof password !== 'string' || !password) {
         return res.status(400).json({ error: 'username and password required' });
       }
@@ -67,10 +101,11 @@ export default function ownerRoutes(db) {
 
       const puid = ownerRow ? ownerRow.profile_uuid : profileUuid;
       const token = mintConsoleToken(db, puid);
+      clearSetupCode(db);
 
       res.status(201).json({ token });
     } catch (e) {
-      res.status(e.status || 500).json({ error: e.message });
+      sendError(res, e);
     }
   });
 
@@ -98,8 +133,13 @@ export default function ownerRoutes(db) {
 
       res.status(200).json({ token });
     } catch (e) {
-      res.status(e.status || 500).json({ error: e.message });
+      sendError(res, e);
     }
+  });
+
+  router.post('/owner/logout', auth, (req, res) => {
+    const revoked = revokeDevice(db, req.ownerDeviceTokenId);
+    res.json({ revoked });
   });
 
   router.post('/owner/pairings', auth, async (req, res) => {
@@ -107,7 +147,7 @@ export default function ownerRoutes(db) {
       const { phrase, expiresAt } = await createPairing(db, req.ownerProfileUuid);
       res.json({ phrase, expiresAt });
     } catch (e) {
-      res.status(e.status || 500).json({ error: e.message });
+      sendError(res, e);
     }
   });
 

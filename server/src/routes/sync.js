@@ -1,10 +1,47 @@
 import { Router } from 'express';
-import { applyBatch } from '../../../questlog-critical/hlc-merge/merge.js';
+import { applyBatch, validateChange } from '../../../questlog-critical/hlc-merge/merge.js';
+import { assertAcceptableDrift } from '../../../questlog-critical/hlc-merge/hlc.js';
 import { SqliteStorageAdapter } from '../sync/adapter.js';
 import { REGISTRY, assertAllowed, validateAppendColumns } from '../sync/registry.js';
 import { makeAuth } from '../middleware/auth.js';
+import { slidingWindowLimit } from '../middleware/rateLimit.js';
 import { verifyAndConsumePairing, createPairing, revokeDevice } from '../../../questlog-critical/sync-auth/pairing.js';
 import { bootstrapSnapshot } from '../services/compaction.js';
+
+// Per-change rejection. `results[].decision` stays in the set the shipped app already decodes
+// (applied | ignored-older | ignored-tombstoned | appended | append-duplicate | undeleted).
+// Invalid changes are omitted from `results` and listed in `rejected`, which old clients ignore.
+// A batch still returns 200 so one poison change does not stall the outbox. Over 500 changes
+// is still 413 and writes nothing.
+function changeRejection(change, now) {
+  if (!change || typeof change !== 'object' || Array.isArray(change)) return 'sync: change must be an object';
+  try {
+    assertAllowed(change.table, change.field);
+    const entry = REGISTRY[change.table];
+    if (entry && entry.appendOnly && change.value !== null && typeof change.value === 'object') {
+      validateAppendColumns(change.table, change.value);
+    }
+    validateChange(change);
+    assertAcceptableDrift(change.hlc, now);
+    return null;
+  } catch (err) {
+    if (err.status && err.status >= 500) throw err;
+    const message = err.message || 'invalid change';
+    if (err.status === 400 || message.startsWith('merge:') || message.startsWith('hlc:') || message.startsWith('sync:')) {
+      return message;
+    }
+    throw err;
+  }
+}
+
+function rejectedEntry(change, reason) {
+  const uuid = change && typeof change.uuid === 'string' ? change.uuid : null;
+  const field = change && typeof change.field === 'string' ? change.field : null;
+  const changeId = change && (typeof change.changeId === 'number' || typeof change.changeId === 'string')
+    ? change.changeId
+    : null;
+  return { uuid, field, changeId, reason };
+}
 
 export default function syncRoutes(db) {
   const router = Router();
@@ -13,16 +50,7 @@ export default function syncRoutes(db) {
   const pairCreateLimit = new Map();
 
   function rateLimitPairCreate(ip) {
-    const now = Date.now();
-    const WINDOW_MS = 15 * 60 * 1000;
-    const MAX = 10;
-    const a = pairCreateLimit.get(ip);
-    if (!a || now - a.windowStart > WINDOW_MS) {
-      pairCreateLimit.set(ip, { count: 1, windowStart: now });
-      return;
-    }
-    a.count += 1;
-    if (a.count > MAX) { const e = new Error('rate limited'); e.status = 429; throw e; }
+    slidingWindowLimit(pairCreateLimit, ip || 'unknown', { windowMs: 15 * 60 * 1000, max: 10 });
   }
 
   router.post('/sync/push', auth, (req, res) => {
@@ -31,7 +59,7 @@ export default function syncRoutes(db) {
     const profileUuid = req.profileUuid;
 
     if (!Array.isArray(changes) || changes.length === 0) {
-      return res.json({ applied: 0, ignored: 0, results: [] });
+      return res.json({ applied: 0, ignored: 0, results: [], rejected: [] });
     }
     // Explicit batch cap (mirrors the pull window; the client batches at 500 anyway). The 1MB
     // body limit bounds this incidentally — this makes the transaction size a contract.
@@ -39,18 +67,19 @@ export default function syncRoutes(db) {
       return res.status(413).json({ error: 'batch too large (max 500 changes)' });
     }
 
+    const now = Date.now();
+    const rejected = [];
+    const acceptedChanges = [];
     for (const c of changes) {
-      assertAllowed(c.table, c.field);
-      const entry = REGISTRY[c.table];
-      if (entry && entry.appendOnly && typeof c.value === 'object' && c.value !== null) {
-        validateAppendColumns(c.table, c.value);
-      }
+      const reason = changeRejection(c, now);
+      if (reason) rejected.push(rejectedEntry(c, reason));
+      else acceptedChanges.push(c);
     }
 
     const store = new SqliteStorageAdapter(db, profileUuid);
 
     const apply = db.transaction(() => {
-      const results = applyBatch(store, changes);
+      const results = acceptedChanges.length ? applyBatch(store, acceptedChanges) : [];
       const now = Date.now();
       const insertLog = db.prepare(
         `INSERT INTO change_log (profile_uuid, table_name, row_uuid, field_name, value_json, hlc, device_id, change_id, created_at)
@@ -81,6 +110,7 @@ export default function syncRoutes(db) {
         applied: accepted,
         ignored: results.length - accepted,
         results: results.map(r => ({ uuid: r.change.uuid, field: r.change.field, decision: r.decision })),
+        rejected,
       };
     });
 
