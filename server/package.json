@@ -13,7 +13,7 @@
   "dependencies": {
     "express": "^4.21.0",
     "better-sqlite3": "^11.3.0",
-    "argon2": "^0.41.0"
+    "argon2": "^0.45.2"
   },
   "overrides": {
     "qs": "6.17.1"
